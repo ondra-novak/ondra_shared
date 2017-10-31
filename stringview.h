@@ -226,6 +226,34 @@ namespace ondra_shared {
 		StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
 		StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
 		StringView(const StringView &other):Base(other) {}
+
+		StringView substr(std::size_t index) const {
+			return StringView(Base::substr(index));
+		}
+		StringView substr(std::size_t index, std::size_t len) const {
+			return StringView(Base::substr(index,len));
+		}
+
+
+		class SplitFn: public Base::SplitFn {
+		public:
+			typedef typename Base::SplitFn SplitBase;
+			SplitFn(const SplitBase &other):SplitBase(other) {}
+
+
+			///returns next element
+			StringView operator()() {return StringView(static_cast<SplitBase &>(*this)());}
+			operator StringView () {return StringView(Base(static_cast<SplitBase &>(*this)));}
+		};
+
+		SplitFn split(const StringView &separator, unsigned int limit = (unsigned int)-1) const {
+			return SplitFn(Base::split(separator, limit));
+		}
+		template<typename Fn>
+		StringView trim(const Fn &fn) {
+			return StringView(Base::trim(fn));
+		}
+
 	};
 
 
