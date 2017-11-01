@@ -1,6 +1,7 @@
 #ifndef __ONDRA_SHARED_MTCOUNTER_421350489746514
 #define __ONDRA_SHARED_MTCOUNTER_421350489746514
 
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 
@@ -18,47 +19,108 @@ namespace ondra_shared {
 class MTCounter {
 public:
 
+	///construct object with counter zero = threads can pass
 	MTCounter():counter(0) {}
+	///construct object with counter above zero = block threads
 	MTCounter(unsigned int counter):counter(counter) {}
 
+	///increment counter
 	void inc() {
-		std::unique_lock<std::mutex> _(lock);
-		counter++;
+		++counter;
 	}
+	///decrement counter
+	/** if counter reached zero, it releases waiting threads */
 	void dec() {
-		std::unique_lock<std::mutex> _(lock);
 		if (counter) {
-			counter--;
-			if (counter == 0) {
+			if (--counter == 0) {
 				waiter.notify_all();
 			}
 		}
 	}
-	bool zeroWait(unsigned int timeout_ms) {
-		std::unique_lock<std::mutex> _(lock);
+
+
+	///Acquire the object
+	/** function is equivalent to inc(). But this function is introduced
+	 * to confort to concept BasicLockable. You can use lock_guard to track
+	 * ownership
+	 */
+	void lock() {inc();}
+	///Relese the object
+	/** function is equivalent to dec(). But this function is introduced
+	 * to confort to concept BasicLockable. You can use lock_guard to track
+	 * ownership
+	 */
+	void unlock() {dec();}
+
+	///Wait for release all references
+	/**
+	 * @param timeout_ms you can specify timeout
+	 */
+	bool wait(unsigned int timeout_ms) {
+		std::unique_lock<std::mutex> _(mtx);
 		return waiter.wait_for(_,std::chrono::milliseconds(timeout_ms), [=]{return counter == 0;});
 	}
-	void zeroWait() {
-		std::unique_lock<std::mutex> _(lock);
+
+	///wait for release all references
+	void wait() {
+		std::unique_lock<std::mutex> _(mtx);
 		waiter.wait(_,[=]{return counter == 0;});
 	}
 
+	///wait until all threads are released or until specified time which happens the first
+	/**
+	 * @param tp a timepoint in the future
+	 * @retval true thread released
+	 * @retval false timeout
+	 */
+	template<typename TimePoint>
+	bool wait_until(const TimePoint &tp) {
+		std::unique_lock<std::mutex> _(mtx);
+		return waiter.wait_until(_,tp, [=]{return counter == 0;});
+	}
+
+	///wait until all threads are released or for specified duration which happens the first
+	/**
+	 * @param dur duration
+	 * @retval true thread released
+	 * @retval false timeout
+	 */
+	template<typename Duration>
+	bool wait_for(const Duration &dur) {
+		std::unique_lock<std::mutex> _(mtx);
+		return waiter.wait_until(_,dur, [=]{return counter == 0;});
+	}
+
+
+	///Receive counter value
+	/** useful for debugging purposes
+	 *
+	 */
 	unsigned int getCounter() const {
 		return counter;
 	}
 
+	///Sets counter
+	/**
+	 * @param counter new counter value
+	 * if the counter is set to zero, it immediately releases all waiting threads
+	 */
 	void setCounter(unsigned int counter) {
-		std::unique_lock<std::mutex> _(lock);
 		this->counter = counter;
 		if (counter == 0) {
 			waiter.notify_all();
 		}
 	}
 
+	///deprecated function for compatibility
+	bool zeroWait(unsigned int timeout_ms) {return wait(timeout_ms);}
+	///deprecated function for compatibility
+	void zeroWait() {return wait();}
+
 protected:
-	std::mutex lock;
+	std::mutex mtx;
 	std::condition_variable waiter;
-	unsigned int counter = 0;
+	std::atomic<unsigned int> counter ;
 };
 
 
