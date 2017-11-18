@@ -7,6 +7,7 @@
 
 #ifndef _ONDRA_SHARED_VIRTUALMEMBER_H_786987987
 #define _ONDRA_SHARED_VIRTUALMEMBER_H_786987987
+#include <stdexcept>
 
 namespace ondra_shared {
 
@@ -26,6 +27,7 @@ namespace ondra_shared {
 
 template<typename Master, typename OffsetType = unsigned char>
 class VirtualMember {
+public:
 	VirtualMember(const Master *master):offset(calculateOffset(this,master)) {}
 	VirtualMember(const VirtualMember &) = delete;
 	void operator=(const VirtualMember &) = delete;
@@ -40,7 +42,7 @@ private:
 
 	static OffsetType calculateOffset(const VirtualMember *p, const Master *q) {
 		std::uintptr_t ofs = reinterpret_cast<const char *>(p) - reinterpret_cast<const char *>(q);
-		assert(ofs<maxOffset);
+		if (ofs<maxOffset) throw std::runtime_error("VirtualMember out of range");
 		return (OffsetType)ofs;
 	}
 protected:

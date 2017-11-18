@@ -5,6 +5,7 @@
 
 #include "stringview.h"
 #include "toString.h"
+#include "virtualMember.h"
 
 
 namespace ondra_shared {
@@ -14,25 +15,25 @@ typedef MutableStringView<char> MutableStrViewA;
 enum class LogLevel {
 	///debug level
 	/** "processing inner cycle" */
-	debug,
+	debug = 0,
 	///non debug information
 	/** "descriptor ID = 10" */
-	info,
+	info = 1,
 	///information about progress
 	/** "reading file", "processing input" */
-	progress,
+	progress = 2,
 	///important non-error information
 	/** "file has been truncated" */
-	note,
+	note = 3,
 	///warning, information which could be error in some cases
 	/** file is read-only, no data has been stored */
-	warning,
+	warning = 4,
 	///error, which caused, that part of code has not been finished, but application still can continue
 	/** "connection lost" */
-	error,
+	error = 5,
 	///fatal error which caused, that application stopped
 	/** "critical error in the chunk ABC" */
-	fatal
+	fatal = 6
 };
 
 class AbstractLogProvider;
@@ -83,19 +84,16 @@ public:
 	virtual void commit(const MutableStrViewA &text) = 0;
 
 
-	///Push current thread identification
-	/** useful when tracking task accross threads
+	///Creates copy of current log provider for specified part of the code which doesn't execute in the single thread
+	/** You attach the log provider to an object and call the log provider
+	 *  everytime when something happen with that object. You can also set name
+	 *  of the object through the argument.
 	 *
-	 * Current identification is handled in the stack. You need to pushIdent
-	 * when the task has assigned the thread, and you need to pupIdent, when
-	 * the current task is leaving the thread.
-	 *
-	 * It is better to handle this using class LogIdent
+	 *  The newly created provider is NOT Multithread Safe. You should always
+	 *  wrapp calling with mutexes. However it have to be safe to use both providers (original
+	 *  and newly created) in different threads at time
 	 */
-	virtual void pushIdent(const StrViewA &ident) = 0;
-
-	///Removes ident from the internal stack
-	virtual void popIdent() = 0;
+	virtual PLogProvider newSection(const StrViewA &ident) = 0;
 
 
 	///Sets the progress value of the current task
@@ -223,12 +221,12 @@ namespace _logDetails {
 	}
 }
 
+
 template<typename... Args>
-void logPrint(LogLevel level, const StrViewA &pattern, Args&&... args) {
+void logPrint(PLogProvider &lp, LogLevel level, const StrViewA &pattern, Args&&... args) {
 
 	using namespace _logDetails;
 
-	PLogProvider &lp = AbstractLogProvider::initInstance();
 	if (lp == nullptr) return;
 
 	AbstractLogProvider *p = lp.get();
@@ -292,7 +290,23 @@ void logPrint(LogLevel level, const StrViewA &pattern, Args&&... args) {
 
 
 };
-	class LogIdent {
+
+
+///Object purposed to perform log output to special sections disconnected to current thread
+/**
+ * By default global log output is managed per thread. Many object often live
+ * in many threads and also often we need to log these object into separated log section
+ * regardless on which thread operation is logged.
+ *
+ * The LogObject created additional log provider from existing or global log provider
+ * and registers it under new name of section.
+ *
+ * Log output for the LogObject must be performed through the object, you cannot use
+ * global logging unless you use setCurrent or swapCurrent
+ *
+ * @note LogObject cannot be copied. You can only move the object.
+ */
+class LogObject {
 
 		class WrFn {
 		public:
@@ -305,56 +319,194 @@ void logPrint(LogLevel level, const StrViewA &pattern, Args&&... args) {
 	public:
 
 
+		///Log to the output a fatal error
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void fatal(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::fatal, pattern, std::forward<Args...>(args...));
+		}
+		///Log to the output a warning
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void warning(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::warning, pattern, std::forward<Args...>(args...));
+		}
+		///Log to the output an error
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void error(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::error, pattern, std::forward<Args...>(args...));
+		}
+		///Log to the output a note
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void note(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::note, pattern, std::forward<Args...>(args...));
+		}
+		///Log to the output a prohress
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void progress(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::progress, pattern, std::forward<Args...>(args...));
+		}
+		///Log to the output an info
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void info(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::info, pattern, std::forward<Args...>(args...));
+		}
 
+		///Log to the output a debug
+		/**
+		 * @param pattern pattern, use $1...$n or $(1)...$(n) as placeholders
+		 * @param args arguments for placeholders
+		 */
+		template<typename... Args>
+		void debug(const StrViewA &pattern, Args&&... args) {
+			logPrint(lp,LogLevel::debug, pattern, std::forward<Args...>(args...));
+		}
+
+
+		///Swap this provider with thread local provider
+		/** Function swaps thread local provider with the provider
+		 * active on this object. This allows to redirect thread local log
+		 * output to the log provider assigned to this instance of LogObject. However
+		 * it also makes that log provider inacccesible from this instance.
+		 *
+		 * To return back to normal, call the function swap() again
+		 *
+		 * @code
+		 * LogObject lg(...);
+		 *
+		 * lg.swap();
+		 * runComplexOperation();
+		 * lg.swap();
+		 * @endcode
+		 *
+		 * @note Above code is not exception safe. To achieve exception safety, you
+		 * should use LogObject::Swap instead
+		 */
+		void swap() {
+			PLogProvider &cur = AbstractLogProvider::getInstance();
+			std::swap(cur,lp);
+		}
+
+		///Creates section where specified LogObject has the log provider swapped with thread local provider
+		/** for more information, see swap()
+		 *
+		 * @code
+		 *
+		 * @code
+		 * LogObject lg(...);
+		 *
+		 * {
+		 * 	LogObject::Swap swap(lg);
+		 * 	runComplexOperation();
+		 * } //swapped back here
+		 * @endcode
+		 */
+		class Swap {
+		public:
+			Swap(LogObject &h):h(h) {h.swap();}
+			~Swap() {h.swap();}
+		protected:
+			LogObject &h;
+		};
+
+
+		///Create log object using global log provider
+		/**
+		 * @param v identification of the section. It is required to have
+		 * function that is able to convert the section identification to string
+		 */
 		template<typename T>
-		LogIdent(const T &v) {
-			PLogProvider &lp = AbstractLogProvider::initInstance();
-			ref = lp.get();
-			if (ref == nullptr) return;
-			WrFn wr;
-			logPrintValue(wr,v);
-			lp->pushIdent(wr.s);
+		LogObject(const T &v)
+			 {
+
+			AbstractLogProvider *clp = AbstractLogProvider::initInstance().get();
+			initSection(clp, v);
 		}
 
-		~LogIdent() {
-			PLogProvider &lp = AbstractLogProvider::initInstance();
-			if (lp.get() == ref) {
-				ref->popIdent();
-			}
+		///Create log object using a specified log provider
+		/**
+		 * @param x source log object
+		 * @param v identification of the section. It is required to have
+		 * function that is able to convert the section identification to string
+		 */
+		template<typename T>
+		LogObject(const LogObject &x, const T &v)
+		{
+
+			initSection(x.lp, v);
 		}
+
+		///Create unitialized log object
+		/**Using such log object doesn't produce any output, however you can initialize
+		 * the log provider later */
+		LogObject() {}
+
+
+
 
 	protected:
-		AbstractLogProvider *ref;
+		PLogProvider lp;
+
+		template<typename T>
+		void initSection(AbstractLogProvider *clp, const T &v) {
+			if (clp != nullptr) {
+				WrFn wr;
+				logPrintValue(wr,v);
+				lp = clp->newSection(wr.s);
+			}
+		}
 	};
 
 
 	template<typename... Args>
 	void logFatal(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::fatal, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::fatal, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logWarning(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::warning, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::warning, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logError(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::error, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::error, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logNote(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::note, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::note, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logProgress(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::progress, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::progress, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logInfo(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::info, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::info, pattern, std::forward<Args...>(args...));
 	}
 	template<typename... Args>
 	void logDebug(const StrViewA &pattern, Args&&... args) {
-		logPrint(LogLevel::debug, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::debug, pattern, std::forward<Args...>(args...));
 	}
 
 }
