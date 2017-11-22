@@ -76,7 +76,7 @@ public:
 
 	StdLogProvider(const PFactory &shared):shared(shared) {}
 	StdLogProvider(const StdLogProvider &other, StrViewA ident)
-		:ident(other.ident+"]["+ident)
+		:ident((other.ident+"][").append(ident.data, ident.length))
 		,shared(other.shared) {}
 
 	virtual bool start(LogLevel level, MutableStrViewA &buffer);
@@ -134,7 +134,7 @@ inline bool StdLogProvider<OutputFn>::start(LogLevel level, MutableStrViewA& b) 
 		std::time(&now);
 		gmtime_r(&now, &tinfo);
 
-		unsignedToString(tinfo.tm_year, wrfn, 10,4);
+		unsignedToString(tinfo.tm_year+1900, wrfn, 10,4);
 		buffer.push_back('-');
 		unsignedToString(tinfo.tm_mon, wrfn, 10,2);
 		buffer.push_back('-');
@@ -162,11 +162,9 @@ inline bool StdLogProvider<OutputFn>::start(LogLevel level, MutableStrViewA& b) 
 		buffer.push_back('[');
 		unsignedToString(curThreadId, wrfn, 10,4);
 		wrstr(ident);
-		wrstr(']');
-		wrstr(' ');
+		wrstr("] ");
 
-		b.data = buffer.data();
-		b.length = buffer.size();
+		b = MutableStrViewA(buffer.data(), buffer.size());
 		prepareBuffer(b);
 		return true;
 	} else {
@@ -190,7 +188,21 @@ inline void StdLogProvider<OutputFn>::commit(const MutableStrViewA& text) {
 
 
 
+
+
+template<typename OutputFn>
+inline void StdLogProvider<OutputFn>::finishBuffer(const MutableStrViewA& b) {
+	auto offset = b.data - buffer.data();
+	buffer.resize(b.length+offset);
 }
 
+template<typename OutputFn>
+inline void StdLogProvider<OutputFn>::prepareBuffer(MutableStrViewA& b) {
+	finishBuffer(b);
+	auto offset = buffer.size();
+	buffer.resize(offset*3/2+400);
+	b = MutableStrViewA(buffer.data()+offset, buffer.size()-offset);
+}
 
+}
 #endif /* _ONDRA_SHARED_STDLOGOUTPUT_H_23312319080809 */

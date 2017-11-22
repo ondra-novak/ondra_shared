@@ -151,12 +151,12 @@ public:
 		if (!enabled) buffer = MutableStrViewA(dummybuff, sizeof(dummybuff));
 		pos=0;
 	}
-	void operator()(char c) {
+	void operator()(char c) const {
 		buffer[pos] = c;
 		pos = (pos + 1) % buffer.length;
 		if (pos == 0 && enabled) provider->sendBuffer(buffer);
 	}
-	void operator()(const StrViewA &c) {
+	void operator()(const StrViewA &c)const {
 		auto remain = buffer.length - pos;
 		StrViewA part = c.substr(0,remain);
 		std::copy(part.data, part.data+part.length, buffer.data+pos);
@@ -182,8 +182,8 @@ public:
 	bool enabled;
 protected:
 	AbstractLogProvider *provider;
-	MutableStrViewA buffer;
-	int pos;
+	mutable MutableStrViewA buffer;
+	mutable int pos;
 	char dummybuff[32];
 };
 
@@ -209,14 +209,14 @@ template<typename WriteFn, typename T> void logPrintValue(const WriteFn &wr, T *
 
 namespace _logDetails {
 
-	static inline void renaderNthArg(LogWriterFn &wr, unsigned int index) {}
+	static inline void renderNthArg(LogWriterFn &wr, unsigned int index) {}
 
 	template<typename T, typename... Args>
 	static inline void renderNthArg(LogWriterFn &wr, unsigned int index, T &&arg1, Args &&... args) {
 		if (index == 1) {
 			logPrintValue(wr, std::forward<T>(arg1));
 		} else {
-			renderNthArg(wr, index-1, std::forward<Args...>(args...));
+			renderNthArg(wr, index-1, std::forward<Args>(args)...);
 		}
 	}
 }
@@ -326,7 +326,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void fatal(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::fatal, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::fatal, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a warning
 		/**
@@ -335,7 +335,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void warning(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::warning, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::warning, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output an error
 		/**
@@ -344,7 +344,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void error(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::error, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::error, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a note
 		/**
@@ -353,7 +353,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void note(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::note, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::note, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a prohress
 		/**
@@ -362,7 +362,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void progress(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::progress, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::progress, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output an info
 		/**
@@ -371,7 +371,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void info(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::info, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::info, pattern, std::forward<Args>(args)...);
 		}
 
 		///Log to the output a debug
@@ -381,7 +381,7 @@ class LogObject {
 		 */
 		template<typename... Args>
 		void debug(const StrViewA &pattern, Args&&... args) {
-			logPrint(lp,LogLevel::debug, pattern, std::forward<Args...>(args...));
+			logPrint(lp,LogLevel::debug, pattern, std::forward<Args>(args)...);
 		}
 
 
@@ -464,6 +464,20 @@ class LogObject {
 		LogObject() {}
 
 
+		template<typename T>
+		LogObject( AbstractLogProvider *lp, const T &v)
+		{
+
+			initSection(lp, v);
+		}
+
+
+
+
+
+		AbstractLogProvider *getProvider() const {
+			return lp.get();
+		}
 
 
 	protected:
@@ -482,31 +496,31 @@ class LogObject {
 
 	template<typename... Args>
 	void logFatal(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::fatal, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::fatal, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logWarning(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::warning, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::warning, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logError(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::error, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::error, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logNote(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::note, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::note, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logProgress(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::progress, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::progress, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logInfo(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::info, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::info, pattern, std::forward<Args>(args)...);
 	}
 	template<typename... Args>
 	void logDebug(const StrViewA &pattern, Args&&... args) {
-		logPrint(AbstractLogProvider::initInstance(),LogLevel::debug, pattern, std::forward<Args...>(args...));
+		logPrint(AbstractLogProvider::initInstance(),LogLevel::debug, pattern, std::forward<Args>(args)...);
 	}
 
 }
