@@ -10,7 +10,7 @@
 namespace ondra_shared {
 
 
-class StdLogFile: public StdLogProviderFactory<StdStreamLogOutputFn> {
+class StdLogFile: public StdLogProviderFactory {
 public:
 
 	///The class takes care about writting to log file
@@ -27,7 +27,7 @@ public:
 			LogLevel minLevel = LogLevel::info,
 			unsigned int autorotate_count = 0,
 			StrViewA autorotate_compress = StrViewA())
-		:StdLogProviderFactory<StdStreamLogOutputFn>(outfile, minLevel)
+		:StdLogProviderFactory( minLevel)
 		,pathname(pathname)
 		,outfile(this->pathname,std::ios::app)
 		,autorotate_count(autorotate_count)
@@ -52,6 +52,10 @@ public:
 		outfile.open(pathname, std::ios::app);
 	}
 
+	virtual void writeToLog(const StrViewA &line, const std::time_t &) override {
+		outfile << line << std::endl;
+	}
+
 
 protected:
 
@@ -59,6 +63,7 @@ protected:
 	std::ofstream outfile;
 	unsigned int autorotate_count;
 	std::string autorotate_compress;
+	std::time_t nextLogRotateTime;
 
 
 

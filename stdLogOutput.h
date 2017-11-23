@@ -14,38 +14,20 @@
 namespace ondra_shared {
 
 
-///Declaration of function to write to the output (for example to file)
-/** @param text contains text to send to the log file
- */
-typedef std::function<void(const StrViewA &text)> LogOutputFn;
 
-
-class StdStreamLogOutputFn {
-public:
-
-	StdStreamLogOutputFn(std::ostream &out):out(out) {}
-
-
-	void operator()(const StrViewA &line) {
-		out << line << std::endl;
-	}
-
-private:
-	std::ostream &out;
-};
-
-
-template<typename OutputFn>
 class StdLogProviderFactory: public RefCntObj, public AbstractLogProviderFactory {
 public:
-	StdLogProviderFactory(const OutputFn &fn, LogLevel level):fn(fn),enabledLevel(level) {}
+	StdLogProviderFactory(LogLevel level = LogLevel::info):enabledLevel(level) {}
 
 	virtual PLogProvider create();
 
+	virtual void writeToLog(const StrViewA &line, const std::time_t &) {
+		std::cerr << line << std::endl;
+	}
 
-	void sendToLog(const StrViewA &line) {
+	void sendToLog(const StrViewA &line, const std::time_t &time) {
 		std::lock_guard<std::mutex> _(lock);
-		fn(line);
+		writeToLog(line, time);
 	}
 
 
@@ -53,26 +35,23 @@ public:
 		enabledLevel = lev;
 	}
 
-	bool isLogLevelEnabled(LogLevel lev) const {
+	virtual bool isLogLevelEnabled(LogLevel lev) const override {
 		return lev >= enabledLevel;
 	}
 
 protected:
-	OutputFn fn;
 	std::mutex lock;
 	LogLevel enabledLevel;
 
 };
 
-template<typename OutputFn>
-using PStdLogProviderFactory = RefCntPtr<StdLogProviderFactory<OutputFn> >;
+using PStdLogProviderFactory = RefCntPtr<StdLogProviderFactory>;
 
 
-template<typename OutputFn>
 class StdLogProvider: public AbstractLogProvider {
 public:
 
-	typedef PStdLogProviderFactory<OutputFn> PFactory;
+	typedef PStdLogProviderFactory PFactory;
 
 	StdLogProvider(const PFactory &shared):shared(shared) {}
 	StdLogProvider(const StdLogProvider &other, StrViewA ident)
@@ -86,10 +65,14 @@ public:
 	virtual void setProgress(float progressVal, int expectedCycles) ;
 
 
+	virtual bool isLogLevelEnabled(LogLevel level) const {
+		return shared->isLogLevelEnabled(level);
+	}
 protected:
 	std::vector<char> buffer;
 	std::string ident;
 	PFactory shared;
+	time_t lastTime;
 
 
 	void finishBuffer(const MutableStrViewA &b);
@@ -98,25 +81,20 @@ protected:
 
 };
 
-template<typename OutputFn>
-inline PLogProvider StdLogProviderFactory<OutputFn>::create() {
-	return PLogProvider(new StdLogProvider<OutputFn>(this));
+inline PLogProvider StdLogProviderFactory::create() {
+	return PLogProvider(new StdLogProvider(this));
 }
 
-template<typename OutputFn>
-inline PLogProvider StdLogProvider<OutputFn>::newSection(
-		const StrViewA& ident) {
+inline PLogProvider StdLogProvider::newSection( const StrViewA& ident) {
 	return PLogProvider(new StdLogProvider(*this, ident));
 }
 
-template<typename OutputFn>
-inline void StdLogProvider<OutputFn>::setProgress(float , int ) {
+inline void StdLogProvider::setProgress(float , int ) {
 	//not implemented
 }
 
 
-template<typename OutputFn>
-inline bool StdLogProvider<OutputFn>::start(LogLevel level, MutableStrViewA& b) {
+inline bool StdLogProvider::start(LogLevel level, MutableStrViewA& b) {
 
 	if (shared->isLogLevelEnabled(level)) {
 
@@ -166,38 +144,30 @@ inline bool StdLogProvider<OutputFn>::start(LogLevel level, MutableStrViewA& b) 
 
 		b = MutableStrViewA(buffer.data(), buffer.size());
 		prepareBuffer(b);
+		lastTime = now;
 		return true;
 	} else {
 		return false;
 	}
 }
 
-template<typename OutputFn>
-inline void StdLogProvider<OutputFn>::sendBuffer(MutableStrViewA& text) {
+inline void StdLogProvider::sendBuffer(MutableStrViewA& text) {
 	prepareBuffer(text);
 }
 
-template<typename OutputFn>
-inline void StdLogProvider<OutputFn>::commit(const MutableStrViewA& text) {
+inline void StdLogProvider::commit(const MutableStrViewA& text) {
 	finishBuffer(text);
-	shared->sendToLog(StrViewA(buffer.data(), buffer.size()));
+	shared->sendToLog(StrViewA(buffer.data(), buffer.size()), lastTime);
 	buffer.clear();
 }
 
 
-
-
-
-
-
-template<typename OutputFn>
-inline void StdLogProvider<OutputFn>::finishBuffer(const MutableStrViewA& b) {
+inline void StdLogProvider::finishBuffer(const MutableStrViewA& b) {
 	auto offset = b.data - buffer.data();
 	buffer.resize(b.length+offset);
 }
 
-template<typename OutputFn>
-inline void StdLogProvider<OutputFn>::prepareBuffer(MutableStrViewA& b) {
+inline void StdLogProvider::prepareBuffer(MutableStrViewA& b) {
 	finishBuffer(b);
 	auto offset = buffer.size();
 	buffer.resize(offset*3/2+400);

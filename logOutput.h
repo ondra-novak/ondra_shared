@@ -2,6 +2,7 @@
 #define _ONDRA_SHARED_DEBUGLOG_H_2908332900212092_
 #include <algorithm>
 #include <memory>
+#include <atomic>
 
 #include "stringview.h"
 #include "toString.h"
@@ -33,7 +34,9 @@ enum class LogLevel {
 	error = 5,
 	///fatal error which caused, that application stopped
 	/** "critical error in the chunk ABC" */
-	fatal = 6
+	fatal = 6,
+	///logging is complete disabled
+	off = 7
 };
 
 class AbstractLogProvider;
@@ -55,6 +58,20 @@ public:
 
 		return globalFactory;
 	}
+
+
+	///Makes this provider as default
+	/**
+	 * Function makes this provider factory as default log factory. It also
+	 * changes log provider of current thread. You need to manually change log provider
+	 * in other threads
+	 */
+	virtual void setDefault();
+
+	///Notifies the log provider (factory) about log-rotate event and requests to reopen log files
+	virtual void reopenLogs() {}
+
+	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
 
 };
 
@@ -139,6 +156,7 @@ public:
 		}
 		return p;
 	}
+	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
 };
 
 
@@ -189,6 +207,7 @@ protected:
 
 
 template<typename WriteFn> void logPrintValue(const WriteFn &wr, StrViewA v) {	wr(v);}
+template<typename WriteFn> void logPrintValue(const WriteFn &wr, const char *v) {	wr(StrViewA(v));}
 template<typename WriteFn> void logPrintValue(const WriteFn &wr, BinaryView v) {
 	for (auto &&c : v) unsignedToString(c,wr,16,2);
 }
@@ -222,8 +241,8 @@ namespace _logDetails {
 }
 
 
-template<typename... Args>
-void logPrint(PLogProvider &lp, LogLevel level, const StrViewA &pattern, Args&&... args) {
+template<typename Provider, typename... Args>
+void logPrint(Provider &lp, LogLevel level, const StrViewA &pattern, Args&&... args) {
 
 	using namespace _logDetails;
 
@@ -306,7 +325,8 @@ void logPrint(PLogProvider &lp, LogLevel level, const StrViewA &pattern, Args&&.
  *
  * @note LogObject cannot be copied. You can only move the object.
  */
-class LogObject {
+template<typename Backend>
+class LogObjectT {
 
 		class WrFn {
 		public:
@@ -325,7 +345,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void fatal(const StrViewA &pattern, Args&&... args) {
+		void fatal(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::fatal, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a warning
@@ -334,7 +354,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void warning(const StrViewA &pattern, Args&&... args) {
+		void warning(const StrViewA &pattern, Args&&... args)const  {
 			logPrint(lp,LogLevel::warning, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output an error
@@ -343,7 +363,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void error(const StrViewA &pattern, Args&&... args) {
+		void error(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::error, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a note
@@ -352,7 +372,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void note(const StrViewA &pattern, Args&&... args) {
+		void note(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::note, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output a prohress
@@ -361,7 +381,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void progress(const StrViewA &pattern, Args&&... args) {
+		void progress(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::progress, pattern, std::forward<Args>(args)...);
 		}
 		///Log to the output an info
@@ -370,7 +390,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void info(const StrViewA &pattern, Args&&... args) {
+		void info(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::info, pattern, std::forward<Args>(args)...);
 		}
 
@@ -380,7 +400,7 @@ class LogObject {
 		 * @param args arguments for placeholders
 		 */
 		template<typename... Args>
-		void debug(const StrViewA &pattern, Args&&... args) {
+		void debug(const StrViewA &pattern, Args&&... args) const {
 			logPrint(lp,LogLevel::debug, pattern, std::forward<Args>(args)...);
 		}
 
@@ -425,10 +445,10 @@ class LogObject {
 		 */
 		class Swap {
 		public:
-			Swap(LogObject &h):h(h) {h.swap();}
+			Swap(LogObjectT &h):h(h) {h.swap();}
 			~Swap() {h.swap();}
 		protected:
-			LogObject &h;
+			LogObjectT &h;
 		};
 
 
@@ -438,7 +458,7 @@ class LogObject {
 		 * function that is able to convert the section identification to string
 		 */
 		template<typename T>
-		LogObject(const T &v)
+		LogObjectT(const T &v)
 			 {
 
 			AbstractLogProvider *clp = AbstractLogProvider::initInstance().get();
@@ -452,7 +472,7 @@ class LogObject {
 		 * function that is able to convert the section identification to string
 		 */
 		template<typename T>
-		LogObject(const LogObject &x, const T &v)
+		LogObjectT(const LogObjectT &x, const T &v)
 		{
 
 			initSection(x.lp, v);
@@ -461,27 +481,34 @@ class LogObject {
 		///Create unitialized log object
 		/**Using such log object doesn't produce any output, however you can initialize
 		 * the log provider later */
-		LogObject() {}
+		LogObjectT() {}
 
 
 		template<typename T>
-		LogObject( AbstractLogProvider *lp, const T &v)
+		LogObjectT( AbstractLogProvider &lp, const T &v)
 		{
 
-			initSection(lp, v);
+			initSection(&lp, v);
 		}
-
-
-
-
 
 		AbstractLogProvider *getProvider() const {
 			return lp.get();
 		}
 
 
+		AbstractLogProvider &operator*() const {
+			return *lp.get();
+		}
+
+
+		bool isLogLevelEnabled(LogLevel level) const {
+			return lp != nullptr && lp->isLogLevelEnabled(level);
+		}
+
+
+
 	protected:
-		PLogProvider lp;
+		Backend lp;
 
 		template<typename T>
 		void initSection(AbstractLogProvider *clp, const T &v) {
@@ -523,8 +550,64 @@ class LogObject {
 		logPrint(AbstractLogProvider::initInstance(),LogLevel::debug, pattern, std::forward<Args>(args)...);
 	}
 
-}
+	inline void AbstractLogProviderFactory::setDefault() {
+		getInstance() = this;
+		AbstractLogProvider::getInstance() = create();
+	}
 
+	class LogLevelToStrTable {
+	public:
+		LogLevelToStrTable() {
+			static std::pair<StrViewA,LogLevel> levelMapDef[] = {
+					{"debug", LogLevel::debug},
+					{"info",LogLevel::info},
+					{"progress",LogLevel::progress},
+					{"note",LogLevel::note},
+					{"warning",LogLevel::warning},
+					{"error",LogLevel::error},
+					{"fatal",LogLevel::fatal},
+					{"off",LogLevel::off}
+			};
+			levelMap = StringView<std::pair<StrViewA,LogLevel> >(levelMapDef, sizeof(levelMapDef)/sizeof(levelMapDef[0]));
+		}
+
+		LogLevel fromString(StrViewA s, LogLevel def = LogLevel::off) const {
+			for (auto &&x:levelMap) if (x.first == s) return x.second;
+			else return def;
+		}
+		StrViewA toString(LogLevel l) const {
+			for (auto &&x:levelMap) if (x.second == l) return x.first;
+			else return StrViewA();
+		}
+
+	protected:
+		StringView<std::pair<StrViewA,LogLevel> >levelMap;
+	};
+
+
+	template<const char *&prefix>
+	class TaskCounter {
+	public:
+		TaskCounter () {
+			static std::atomic<unsigned int> counter(0);
+			curValue = ++counter;
+		}
+
+	unsigned int curValue;
+	};
+
+	template<typename WriteFn, const char *&prefix>
+	void logPrintValue(const WriteFn &wr, const TaskCounter<prefix> &t) {
+		wr(prefix);
+		wr(':');
+		wr(t.curValue);
+	}
+
+
+	typedef LogObjectT<PLogProvider> LogObject;
+	typedef LogObjectT<std::shared_ptr<AbstractLogProvider> > SharedLogObject;
+
+}
 
 
 #endif
