@@ -94,6 +94,13 @@ public:
 		data.clear();
 	}
 
+	StringPool() {}
+	StringPool(StringPool &&other):data(std::move(data)) {}
+	StringPool &operator=(StringPool &&other) {
+		data = std::move(data);
+		return *this;
+	}
+
 protected:
 	std::vector<T> data;
 };
