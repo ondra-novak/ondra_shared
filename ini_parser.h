@@ -19,7 +19,7 @@ struct IniItem {
 
 	IniItem(Type t, const StrViewA &a):type(t),value(a) {}
 	IniItem(Type t, const StrViewA &a, const StrViewA &b):type(t),key(a),value(b) {}
-	IniItem(Type t, const StrViewA &a, const StrViewA &b, const StrViewA &b):type(t),section(a),key(b),value(c) {}
+	IniItem(Type t, const StrViewA &a, const StrViewA &b, const StrViewA &c):type(t),section(a),key(b),value(c) {}
 
 
 };
@@ -102,17 +102,18 @@ public:
 
 
 	IniParser(const Output &out)
-		:out(out)
-		,sectionSize(0)
+		:buffer(1,0)
+		,fn(out)
+		,sectionSize(1)
 		,keySize(0)
 		,valueSize(0)
-		,curstate(beginLine)
+		,curState(beginLine)
 		,escapeChar('\\'){}
 
 
 	void operator()(int c) {
 
-		switch (state) {
+		switch (curState) {
 		case beginLine: readBeginLine(c);break;
 		case comment: readComment(c);break;
 		case section: readSection(c);break;
@@ -120,7 +121,7 @@ public:
 		case value: readValue(c);break;
 		case valueEscaped: readValueEscaped(c);break;
 		case valueEscapedNl: readValueEscapedNl(c);break;
-		case waitForEoln: readTillEoln(c);break;
+		case waitForEoln: waitTillEoln(c);break;
 		case directiveKeyword: readDirectiveKeyword(c);break;
 		case directiveData: readDirectiveData(c);break;
 		}
@@ -207,23 +208,26 @@ protected:
 	void readValueGen(int c, State escState, IniItem::Type dataType) {
 		if (isnl(c)) {
 			buffer.push_back(0);
-			valueSize = buffer.size() - keySize;
+			valueSize = buffer.size() - (keySize+sectionSize);
 			StrViewA sectionName(buffer.data(), sectionSize-1);
 			StrViewA keyName(buffer.data()+sectionSize, keySize-1);
 			StrViewA valueName(buffer.data()+sectionSize+keySize, valueSize-1);
-			sectionName.trim(isspace);
-			keyName.trim(isspace);
-			valueName.trim(isspace);
+			sectionName=sectionName.trim(isspace);
+			keyName=keyName.trim(isspace);
+			valueName=valueName.trim(isspace);
 			buffer[sectionName.data+sectionName.length - buffer.data()] = 0;
 			buffer[keyName.data+keyName.length - buffer.data()] = 0;
 			buffer[valueName.data+valueName.length - buffer.data()] = 0;
+			bool processed = false;
 			if (dataType == IniItem::directive) {
 				if (keyName == "\\") {
 					if (valueName.length == 1) {
-						escapeChar = valueName[1];
+						escapeChar = valueName[0];
+						processed = true;
 					}
 				}
-			} else {
+			}
+			if (!processed) {
 				fn(IniItem(dataType,sectionName, keyName, valueName));
 			}
 			curState = beginLine;
@@ -238,7 +242,7 @@ protected:
 	void readValueEscaped(int c) {
 		switch (c) {
 		case '\n':
-		case '\r': curState = valueEscapedNl; break;
+		case '\r': curState = valueEscapedNl; return;
 		case 'r': buffer.push_back('\r');break;
 		case 'n': buffer.push_back('\n');break;
 		default: buffer.push_back((char)c);break;
@@ -263,7 +267,7 @@ protected:
 		if (isspace(c)) {
 			buffer.push_back(0);
 			keySize = buffer.size() - sectionSize;
-			curState = value;
+			curState = directiveData;
 			if (isnl(c)) readDirectiveData(c);
 		} else {
 			buffer.push_back((char)c);

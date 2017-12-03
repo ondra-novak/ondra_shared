@@ -37,12 +37,12 @@ public:
 private:
 	OffsetType offset;
 
-	static const std::uintptr_t maxOffset = 1<<(sizeof(offset)*8);
+	static const std::uintptr_t maxOffset = 1<<(sizeof(offset)*8)-1;
 
 
 	static OffsetType calculateOffset(const VirtualMember *p, const Master *q) {
 		std::uintptr_t ofs = reinterpret_cast<const char *>(p) - reinterpret_cast<const char *>(q);
-		if (ofs<maxOffset) throw std::runtime_error("VirtualMember out of range");
+		if (ofs>maxOffset) throw std::runtime_error("VirtualMember out of range");
 		return (OffsetType)ofs;
 	}
 protected:

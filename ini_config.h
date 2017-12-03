@@ -7,6 +7,16 @@
 
 #ifndef _ONDRA_SHARED_INI_CONFIG_23123148209810_
 #define _ONDRA_SHARED_INI_CONFIG_23123148209810_
+#include <map>
+#include <string>
+#include <fstream>
+
+#include "finally.h"
+
+
+#include "ini_parser.h"
+
+#include "stringpool.h"
 
 namespace ondra_shared {
 
@@ -22,19 +32,80 @@ public:
 		String v;
 		String p;
 
+		Value(){}
 		Value(String v,String p):v(v),p(p) {}
 		std::string getPath() const;
 		std::size_t getUInt() const;
 		std::intptr_t getInt() const;
 		StrViewA getString() const {return v.getView();}
 		const char *c_str() const {return v.getView().data;}
+
+		static const Value &undefined() {
+			static Value udef;
+			return udef;
+		}
+		bool defined() const {return this != &undefined();}
 	};
 
-	typedef std::map<String, Value> KeyValueMap;
+	class NotFoundException: public std::exception {
+	public:
+		NotFoundException(std::string &&section, std::string &&key)
+			:section(std::move(section)),key(std::move(key))
+		{
+			msg = std::string("Config option ") + this->section+"."+this->key+" is mandatory but missing.";
+		}
+
+		const char *what() const throw() {return msg.c_str();}
+
+	protected:
+		std::string section;
+		std::string key;
+		std::string msg;
+
+	};
+
+	class KeyValueMap: public std::map<String, Value> {
+	public:
+		class Mandatory:public VirtualMember<KeyValueMap> {
+		public:
+			using VirtualMember<KeyValueMap>::VirtualMember;
+			const Value &operator[](StrViewA name) const {
+				return getMaster()->getMandatory(name);
+			}
+		};
+
+		Mandatory mandatory;
+
+		KeyValueMap(const String &section):mandatory(this),section(section) {}
+		KeyValueMap(const KeyValueMap &other):std::map<String, Value>(other),mandatory(this),section(other.section) {}
+		KeyValueMap(KeyValueMap &&other):std::map<String, Value>(std::move(other)),mandatory(this),section(other.section) {}
+
+		const Value &operator[](StrViewA name) const {
+			auto iter = find(String(name));
+			if (iter == end()) return Value::undefined();
+			else return iter->second;
+
+		}
+
+	private:
+		const Value &getMandatory(StrViewA name) const {
+			auto iter = find(String(name));
+			if (iter == end()) throw NotFoundException(section.getView(), name);
+			else return iter->second;
+		}
+
+		void changeName(const StrViewA &name) const {section = name;}
+
+
+
+		mutable String section;
+
+		friend class IniConfig;
+	};
 	typedef std::map<String, KeyValueMap> SectionMap;
 
 
-	const SectionMap &operator[](const StrViewA &sectionName) const;
+	const KeyValueMap &operator[](const StrViewA &sectionName) const;
 	SectionMap::const_iterator begin() const;
 	SectionMap::const_iterator end() const;
 
@@ -50,7 +121,7 @@ public:
 
 	void load(const IniItem &item);
 
-	IniConfig() {}
+	IniConfig():emptyMap(StrViewA()) {}
 	IniConfig(const IniConfig &other);
 	IniConfig(IniConfig &&other);
 
@@ -77,26 +148,27 @@ protected:
 
 inline std::string IniConfig::Value::getPath() const {
 	std::string s;
-	s.reserve(v.length + p.length);
-	s.append(p.data,p.length);
-	s.append(v.data,v.length);
+	s.reserve(v.getLength() + p.getLength());
+	s.append(p.getData(),p.getLength());
+	s.append(v.getData(),v.getLength());
 	return s;
 }
 
-inline const SectionMap& IniConfig::operator [](const StrViewA& sectionName) const {
+inline const IniConfig::KeyValueMap& IniConfig::operator [](const StrViewA& sectionName) const {
 	auto itr = smap.find(sectionName);
 	if (itr == smap.end()) {
+		emptyMap.changeName(sectionName);
 		return emptyMap;
 	} else{
 		return itr->second;
 	}
 }
 
-inline SectionMap::const_iterator IniConfig::begin() const {
+inline IniConfig::SectionMap::const_iterator IniConfig::begin() const {
 	return smap.begin();
 }
 
-inline SectionMap::const_iterator IniConfig::end() const {
+inline IniConfig::SectionMap::const_iterator IniConfig::end() const {
 	return smap.end();
 }
 
@@ -128,30 +200,21 @@ inline bool IniConfig::load(const std::string& pathname,const D& directives) {
 	if (!input) return false;
 	auto sep = pathname.find(pathSeparator);
 	if (sep != pathname.npos) {
-		StrViewA newpath = StrViewA(pathname).substr(0,sep);
-		if (newpath[0] == '/') {
-			curPath = pool.add(newpath);
-		} else {
-			dummy.resize(curPath.length+newpath.length);
-			dummy.append(curPath.data,curPath.length);
-			dummy.append(newpath.data, newpath.length);
-			curPath = pool.add(dummy);
-		}
+		StrViewA newpath = StrViewA(pathname).substr(0,sep+1);
+		curPath = pool.add(newpath);
 	}
 	auto processFn = [this,directives](const IniItem &item) {
 		if (item.type == IniItem::data)	this->load(item);
 		else if (item.type == IniItem::directive) {
 			if (item.key == "include") {
-				Value v;
-				v.p = curPath;
-				v.v = item.value;
+				Value v(item.value, curPath);
 				if (this->load(v.getPath(),directives)) return;
 			}
 			directives(item);
 		}
 	};
 
-	IniParser<decltype(processFn)> parser;
+	IniParser<decltype(processFn)> parser(processFn);
 	int i = input.get();
 	while (i != -1) {
 		parser(i);
@@ -163,12 +226,12 @@ inline bool IniConfig::load(const std::string& pathname,const D& directives) {
 
 
 inline void IniConfig::load(const std::string& pathname) {
-	load(pathname, [](IniItem &){} );
+	load(pathname, [](const IniItem &){} );
 }
 
 inline std::size_t IniConfig::Value::getUInt() const {
 	std::size_t x = 0;
-	for (char c : v) {
+	for (char c : v.getView()) {
 		if (isdigit(c)) x = x * 10 + (c - '0');
 		else break;
 	}
@@ -176,10 +239,11 @@ inline std::size_t IniConfig::Value::getUInt() const {
 }
 
 inline std::intptr_t IniConfig::Value::getInt() const {
-	if (v.empty()) return 0;
-	if (v[0] == '-') {
+	auto sv = v.getView();
+	if (sv.empty()) return 0;
+	if (sv[0] == '-') {
 		Value z;
-		z.v = v.substr(1);
+		z.v = sv.substr(1);
 		return - (std::intptr_t) z.getUInt();
 	} else {
 		return (std::intptr_t)getUInt();
@@ -191,16 +255,15 @@ inline void IniConfig::load(const IniItem& item) {
 	KeyValueMap *kv;
 	if (s == smap.end()) {
 		String sname = pool.add(item.section);
-		kv = &smap[sname];
-	} else {
-		kv = &s->second;
+		s = smap.insert(std::make_pair(sname, KeyValueMap(sname))).first;
 	}
+	kv = &s->second;
 	String k = pool.add(item.key);
 	String v = pool.add(item.value);
 	Value vv;
 	vv.p = curPath;
 	vv.v = v;
-	(*kv)[k] = vv;
+	kv->insert(std::make_pair(k,vv));
 
 }
 

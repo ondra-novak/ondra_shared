@@ -53,6 +53,18 @@ public:
 			else return StringView<T>(ptr, length);
 		}
 
+
+		std::size_t getLength() const {
+			return length;
+		}
+
+		const T *getData() const {
+			if (buffer) return buffer->data()+offset;
+			else return ptr;
+		}
+
+		bool empty() const {return length == 0;}
+
 		bool operator==(const String &other) const {return getView() == other.getView();}
 		bool operator!=(const String &other) const {return getView() != other.getView();}
 		bool operator>(const String &other) const {return getView() > other.getView();}
