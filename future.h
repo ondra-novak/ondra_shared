@@ -7,7 +7,12 @@
 
 #ifndef _ONDRA_SHARED_FUTURE_H_2390874612087
 #define _ONDRA_SHARED_FUTURE_H_2390874612087
+#include <atomic>
+#include <condition_variable>
 #include <exception>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 
 namespace ondra_shared {
@@ -101,7 +106,8 @@ public:
 	 * @retval true installed
 	 * @retval false not installed, the future is already resolved (has value)
 	 */
-	bool watch(const WatchHandler &handler);
+	template<typename Handler>
+	bool watch(const Handler &handler);
 	///Tries to get value
 	/**
 	 * @retval nullptr The future has no value yet
@@ -116,10 +122,7 @@ public:
 	}
 
 
-	std::exception_ptr getException() const {
-		Lock _(lock);
-		return this->exceptPtr;
-	}
+	std::exception_ptr getException() const;
 
 
 	///Future resolved when all futures in the range are resolved
@@ -158,8 +161,6 @@ protected:
 	Handlers handlers;
 	///lock protect internals
 	std::recursive_mutex lock;
-	///condition variable
-	std::condition_variable cond;
 	///storage for value;
 	unsigned char storage[sizeof(T)];
 
@@ -182,7 +183,6 @@ template<typename T>
 class SharedFuture: public std::shared_ptr<Future<T> > {
 public:
 	typedef std::shared_ptr<Future<T> > Super;
-	typedef typename Future<T>::ValType ValType;
 
 	using std::shared_ptr<Future<T> >::shared_ptr;
 
@@ -228,7 +228,8 @@ public:
 	 * @retval true installed
 	 * @retval false not installed, the future is already resolved (has value)
 	 */
-	bool watch(const typename Future<T>::WatchHandler &handler) {return this->get()->watch(handler);}
+	template<typename Handler>
+	bool watch(const Handler &handler) {return this->get()->watch(handler);}
 	///Tries to get value
 	/**
 	 * @retval nullptr The future has no value yet
@@ -307,13 +308,6 @@ inline Future<T>::~Future() {
 		this->exceptPtr = std::make_exception_ptr((FutureDestroyed()));
 		//notify all listeners
 		notifyLk();
-		//unlock now, so any threads waiting for the results can continue
-		_.unlock();
-		//notify again (last call)
-		cond.notify_all();
-		//lock the mutex to ensure that nobody accessing the future
-		_.lock();
-		//continue in destruction
 	}
 }
 
@@ -366,8 +360,13 @@ inline bool Future<T>::hasValue() const {
 
 template<typename T>
 inline const T& Future<T>::get() const {
+
 	Lock _(lock);
-	cond.wait(_,[&]{return hasValueLk();});
+	while (!hasValueLk()) {
+		std::condition_variable_any cond;
+		handlers.push_back([&cond]{cond.notify_all();});
+		cond.wait(_);
+	}
 	if (exceptPtr != nullptr) std::rethrow_exception(exceptPtr);
 	return *valuePtr;
 }
@@ -375,25 +374,40 @@ inline const T& Future<T>::get() const {
 template<typename T>
 inline void Future<T>::wait() const {
 	Lock _(lock);
-	cond.wait(_,[&]{return hasValueLk();});
+	while (!hasValueLk()) {
+		std::condition_variable_any cond;
+		handlers.push_back([&cond]{cond.notify_all();});
+		cond.wait(_);
+	}
 }
 
 template<typename T>
 template<typename Duration>
 inline bool Future<T>::wait_for(const Duration& dur) {
 	Lock _(lock);
-	cond.wait_for(_,dur,[&]{return hasValueLk();});
+	while (!hasValueLk()) {
+		std::condition_variable cond;
+		handlers.push_back([&cond]{cond.notify_all();});
+		if (cond.wait_for(_,dur) == std::cv_status::timeout) return false;
+	}
+	return true;
 }
 
 template<typename T>
 template<typename TimePoint>
 inline bool Future<T>::wait_until(const TimePoint& tp) {
 	Lock _(lock);
-	cond.wait_until(_,tp,[&]{return hasValueLk();});
+	while (!hasValueLk()) {
+		std::condition_variable_any cond;
+		handlers.push_back([&cond]{cond.notify_all();});
+		if (cond.wait_until(_,tp) == std::cv_status::timeout) return false;
+	}
+	return true;
 }
 
 template<typename T>
-inline bool Future<T>::watch(const WatchHandler& handler) {
+template<typename Handler>
+inline bool Future<T>::watch(const Handler& handler) {
 	Lock _(lock);
 	if (hasValueLk()) return false;
 	handlers.push_back(handler);
@@ -411,6 +425,13 @@ template<typename T>
 inline bool Future<T>::hasValueLk() const {
 	return valuePtr != nullptr || exceptPtr != nullptr;
 }
+
+template<typename T>
+std::exception_ptr Future<T>::getException() const {
+	Lock _(lock);
+	return this->exceptPtr;
+}
+
 
 template<typename T>
 inline void Future<T>::all(T beg, const T& end) {
@@ -455,7 +476,6 @@ inline void Future<T>::notifyLk() {
 	}
 	Handlers h;
 	std::swap(h, handlers);
-	cond.notify_all();
 
 }
 
