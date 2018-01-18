@@ -73,6 +73,8 @@ public:
 
 	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
 
+	virtual ~AbstractLogProviderFactory() {}
+
 };
 
 
@@ -135,7 +137,7 @@ public:
 	 * the function initInstance()
 	 */
 	static PLogProvider &getInstance() {
-		static thread_local PLogProvider curInst;
+		static thread_local PLogProvider curInst(nullptr);
 		return curInst;
 	}
 
@@ -157,7 +159,11 @@ public:
 		return p;
 	}
 	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
+
+	virtual ~AbstractLogProvider() {}
 };
+
+
 
 
 
@@ -228,7 +234,7 @@ template<typename WriteFn, typename T> void logPrintValue(const WriteFn &wr, T *
 
 namespace _logDetails {
 
-	static inline void renderNthArg(LogWriterFn &wr, unsigned int index) {}
+	static inline void renderNthArg(LogWriterFn &, unsigned int ) {}
 
 	template<typename T, typename... Args>
 	static inline void renderNthArg(LogWriterFn &wr, unsigned int index, T &&arg1, Args &&... args) {
@@ -573,11 +579,11 @@ class LogObjectT {
 
 		LogLevel fromString(StrViewA s, LogLevel def = LogLevel::off) const {
 			for (auto &&x:levelMap) if (x.first == s) return x.second;
-			else return def;
+			return def;
 		}
 		StrViewA toString(LogLevel l) const {
 			for (auto &&x:levelMap) if (x.second == l) return x.first;
-			else return StrViewA();
+			return StrViewA();
 		}
 
 	protected:
