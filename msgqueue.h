@@ -157,6 +157,7 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_for(
 	queue.pop();
 	_.unlock();
 	fn(ret);
+	return true;
 }
 
 template<typename Msg, typename QueueImpl>
@@ -169,6 +170,7 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_until(
 	queue.pop();
 	_.unlock();
 	fn(ret);
+	return true;
 }
 
 template<typename Msg, typename QueueImpl>
