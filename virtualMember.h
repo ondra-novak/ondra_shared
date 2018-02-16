@@ -37,7 +37,7 @@ public:
 private:
 	OffsetType offset;
 
-	static const std::uintptr_t maxOffset = 1<<(sizeof(offset)*8)-1;
+	static const std::uintptr_t maxOffset = (1<<(sizeof(offset)*8))-1;
 
 
 	static OffsetType calculateOffset(const VirtualMember *p, const Master *q) {

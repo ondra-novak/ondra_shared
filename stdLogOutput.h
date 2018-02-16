@@ -19,7 +19,7 @@ class StdLogProviderFactory: public RefCntObj, public AbstractLogProviderFactory
 public:
 	StdLogProviderFactory(LogLevel level = LogLevel::info):enabledLevel(level) {}
 
-	virtual PLogProvider create();
+	virtual PLogProvider create() override;
 
 	virtual void writeToLog(const StrViewA &line, const std::time_t &) {
 		std::cerr << line << std::endl;
