@@ -103,12 +103,12 @@ public:
 
 	IniParser(const Output &out)
 		:buffer(1,0)
-		,fn(out)
 		,sectionSize(1)
 		,keySize(0)
 		,valueSize(0)
-		,curState(beginLine)
-		,escapeChar('\\'){}
+		,escapeChar('\\')
+		,fn(out)
+		,curState(beginLine) {}
 
 
 	void operator()(int c) {

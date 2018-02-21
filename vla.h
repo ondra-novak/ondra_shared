@@ -74,7 +74,7 @@ protected:
 		} else {
 			items = reinterpret_cast<Type *>(me->buffer);
 		}
-		for (auto i = 0; i < count; i++) {
+		for (std::size_t i = 0; i < count; i++) {
 			try {
 				new(items+i) Type(std::forward<Args>(args) ...);
 			} catch (...) {
