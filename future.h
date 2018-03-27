@@ -189,7 +189,7 @@ protected:
 
 	typedef std::unique_lock<std::mutex> Sync;
 
-	PWatchHandler watchChain;
+	PWatchHandler watchChain = nullptr;
 	const T *value = nullptr;
 	std::exception_ptr exception;
 	unsigned char valueBuffer[sizeof(T)];
@@ -240,39 +240,172 @@ public:
 	template<typename Fn> using RetFnThenVoid = typename FutureFromType<T, decltype(std::declval<Fn>()())>::type;
 
 
+	///Create and initialize future variable (the shared state)
 	Future();
-	Future(nullptr_t);
+	///Create uninitialized future variable. It cannot be used until someone assign it a value
+	Future(std::nullptr_t) {}
+	///Create already resolved future variable
 	static Future resolve(const T &val);
+	///Create already resolved future variable
 	static Future resolve(T &&val);
+	///Create a future which is initialized by other future
 	static Future resolve(Future<T> val);
+	///Create a rejected future, which is rejected by current exception (call in catch handler)
 	static Future rejected();
+	///Create a rejected future, which is rejected by specific exception
 	static Future rejected(const std::exception_ptr &e);
 
+	///Get value
+	/**
+	 * Function block when the value is not set.
+	 * @return value
+	 * @exception any if the future is rejected, the exception is thrown
+	 */
 	const T &get() const;
+	///Get The value
 	operator const T &() const;
+	///Set the value
+	/**
+	 * @param value new value. You can set the value only once. Additional atempts are ignored
+	 */
 	void set(const T &value);
+	///Set the value
+	/**
+	 * @param value new value. You can set the value only once. Additional atempts are ignored
+	 */
 	void set(T &&value);
+	///Sets the value base on other futurue
+	/**
+	 * @param value an other future. Futures are linked, so the value can be set later when to source future
+	 * becomes resolved
+	 */
 	void set(Future<T> value);
+	///Reject the future with an exception
+	/**
+	 * @param exception exception
+	 */
 	void reject(const std::exception_ptr &exception);
+	///Reject the future with current exception
 	void reject();
+	///Wait for resolution
+	/** Function blocks until the future is set
+	 */
 	void wait() const;
+	///Wait for specified time
 	template<typename Dur> bool wait_for(Dur &&dur);
+	///Wait until specified time
 	template<typename Time> bool wait_until(Time &&dur);
+	///Asynchronous waiting
+	/**
+	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
+	 *
+	 * @param fn function to execite
+	 * @retval true future is already resolved, so code will not be executed
+	 * @retval false future is not resolved, the code will be executed
+	 */
 	template<typename Fn> bool await(const Fn &fn);
+	///Asynchronous waiting
+	/**
+	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
+	 *
+	 * @param fn function to execute
+	 * @param exceptFn function to execute when the value is rejected
+	 * @retval true future is already resolved, so code will not be executed
+	 * @retval false future is not resolved, the code will be executed
+	 */
 	template<typename Fn, typename ExceptFn> bool await(const Fn &fn, const ExceptFn &exceptFn);
+	///Asynchronous waiting
+	/**
+	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
+	 *
+	 * @param exceptFn function to execute when the value is rejected
+	 * @retval true future is already resolved, so code will not be executed
+	 * @retval false future is not resolved, the code will be executed
+	 *
+	 */
 	template<typename ExceptFn> bool await_catch(const ExceptFn &exceptFn);
+	///Specifies function, which is called upon future resolution.
+	/**
+	 *
+	 * @param fn function to call when future's value is set. The function must accept the future's value as argument.
+	 *  The function can return a value of another type or a Future value.
+	 * @return Future of return value. If the function throws exception, the returned future becomes rejected
+
+	 * @note rejected state of the source future is directly transfered to returning future
+
+	 */
 	template<typename Fn> RetFnThen<Fn> then(const Fn &fn);
+	///Specifies function, which is called upon future resolution.
+	/**
+	 *
+	 * @param fn function to call when future's value is set. The function is called without arguments
+	 *  The function can return a value of another type or a Future value.
+	 * @return Future of return value. If the function throws exception, the returned future becomes rejected
+
+	 * @note rejected state of the source future is directly transfered to returning future
+
+	 */
 	template<typename Fn> RetFnThenVoid<Fn> then(const Fn &fn);
+	///Specifies function, which is called upon future resolution.
+	/**
+	 *
+	 * @param fn function to call when future's value is set. The function must accept the future's value as argument.
+	 *  The function can return a value of another type or a Future value.
+	 * @param excepttFn function to call when future is in rejected state. The function must accept exception_ptr.
+	 *  The function must return a value of the same type as the fn().
+	 * @return Future of return value. If the function throws exception, the returned future becomes rejected
+
+
+	 */
 	template<typename Fn, typename ExceptFn> RetFnThen<Fn> then(const Fn &fn, const ExceptFn &exceptFn);
+	///Specifies function, which is called upon future resolution.
+	/**
+	 *
+	 * @param fn function to call when future's value is set. The function is called without arguments
+	 *  The function can return a value of another type or a Future value.
+	 * @param excepttFn function to call when future is in rejected state. The function must accept exception_ptr.
+	 *  The function must return a value of the same type as the fn().
+	 * @return Future of return value. If the function throws exception, the returned future becomes rejected
+
+
+	 */
 	template<typename Fn, typename ExceptFn> RetFnThenVoid<Fn> then(const Fn &fn, const ExceptFn &exceptFn);
+	///Specifies function, which is called upon the future rejection
+	/**
+	 * @param excepttFn function to call when future is in rejected state. The function must accept exception_ptr.
+	 *  The function must return a value of the same type as the type of the future
+	 * @return Future of return value. If the function throws exception, the returned future becomes rejected
+	 *
+	 * @note if the future is not in rejected state, the value is transfered to the returning future
+	 */
+
 	template<typename ExceptFn> Future then_catch(const ExceptFn &exceptFn);
+
+	///Creates a function which - when is called - uses return value of the specifed function to set the future value
+	/**
+	 *
+	 * @param fn function to bind with the future
+	 * @return function bound with the future
+	 */
 	template<typename Fn> typename FutureValue<T>::template CallFnSetValue<Fn> operator <<=(Fn &&fn);
+
+	///Alternative way to set value
 	template<typename Arg>	void operator << (Arg && arg);
+
+	///Alternative way to call then()
 	template<typename Fn> auto operator >> (Fn && fn) -> decltype(this->then(fn));
 
+	///Controls exceptional state of the future variable
+	/**
+	 * @code
+	 * !(fn() >> [=](int x) {... normal behaviour...; return x;}) >> [=](std::exception_ptr &e) {...exception behaviour; return 42;};
+	 * @endcode
+	 */
 	FutureExceptionalState<Future<T> > operator !() ;
 
+	///Returns true if future is resolved (set or rejected)
 	bool is_resolved() const;
+	///Returns true if future is rejected
 	bool is_rejected() const;
 
 
