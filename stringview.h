@@ -187,7 +187,7 @@ namespace ondra_shared {
 		}
 
 		template<typename Fn>
-		StringViewBase trim(const Fn &fn) {
+		inline StringViewBase trim(const Fn &fn) {
 			StringViewBase src(*this);
 			while (!src.empty() && fn(src[0])) src = src.substr(1);
 			while (!src.empty() && fn(src[src.length-1])) src = src.substr(0,src.length-1);
@@ -250,7 +250,7 @@ namespace ondra_shared {
 			return SplitFn(Base::split(separator, limit));
 		}
 		template<typename Fn>
-		StringView trim(const Fn &fn) {
+		inline StringView trim(const Fn &fn) {
 			return StringView(Base::trim(fn));
 		}
 
