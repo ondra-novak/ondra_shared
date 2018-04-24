@@ -1,8 +1,10 @@
 #ifndef _ONDRA_SHARED_FUTURE_H_239087461782087
 #define _ONDRA_SHARED_FUTURE_H_239087461782087
 
-#include <condition_variable>
-#include <mutex>
+#include <atomic>
+#include <cstddef>
+
+#include "waitableEvent.h"
 
 namespace ondra_shared {
 
@@ -35,7 +37,7 @@ public:
 	template<typename Fn> class CallFnSetValue;
 
 	///Constructs uninitialized future variable
-	FutureValue() {}
+	FutureValue():watchChain(nullptr),rslv_lock(0) {}
 	///Destroys unitialized future variable
 	/** If the variable is destroyed when in the empty (unresolved) state, the all handlers
 	 * are notified with exception UnresolvedFutureExcepton
@@ -48,7 +50,7 @@ public:
 	 * @param value other future. The state is copied only when source future
 	 * already resolved. Otherwise the unresolved future is constructed
 	 */
-	FutureValue(const FutureValue &value) {
+	FutureValue(const FutureValue &value):watchChain(nullptr),rslv_lock(0) {
 		if (value.exception != nullptr) set(value.exception);
 		else if (value.value) set(*value.value);
 	}
@@ -112,21 +114,16 @@ public:
 	///Blocks execution until the future is resolved
 	void wait() const;
 
-	///Blocks execution until the future is resolved or timeout period ellapses which comes first
-	/**
-	 * @param dur duration
-	 * @retval true resolved
-	 * @retval false timeout
+	///Creates waitable event, which unblocks when future is resolved
+	/** Waitable events implements waiting for specified timeout
+	 *
+	 * @note that each time the function is called, a new object is created. If you need
+	 * to repeatedly wait with a timeout just create one object and repeatedly wait on
+	 * it.
+	 *
+	 * @return new waitable event
 	 */
-	template<typename Dur> bool wait_for(Dur &&dur);
-
-	///Blocks execution until the future is resolved or timeout period ellapses which comes first
-	/**
-	 * @param dur duration
-	 * @retval true resolved
-	 * @retval false timeout
-	 */
-	template<typename Time> bool wait_until(Time &&dur) ;
+	std::shared_ptr<WaitableEvent> create_waitable_event();
 
 	///Asynchronous waiting
 	/**
@@ -134,6 +131,8 @@ public:
 	 * @param fn function to execute
 	 * @retval true the future is already resolved
 	 * @retval false the future is nor resolved, the function is scheduled
+	 *
+	 * @note function is not called when the future is resolved by the exception
 	 */
 	template<typename Fn> bool await(Fn &&fn);
 
@@ -171,32 +170,49 @@ public:
 protected:
 
 	class AbstractWatchHandler;
-	typedef AbstractWatchHandler *PWatchHandler;
 
 	class AbstractWatchHandler {
 	public:
+		///called when future is resolved with a value
 		virtual void onValue(const T &value) noexcept(true) = 0;
+		///called when future is resolved with an exception
 		virtual void onException(const std::exception_ptr &exception) noexcept(true) = 0;
+		///always called when handler is no longer needed
+		/** You can use this function to cleanup the handler
+		 *
+		 * Other use of this function is to perform some general action regardless on
+		 * the value, because the function is always called even if the handler is not
+		 * added to the handler chain
+		 *
+		 */
 		virtual void release() {delete this;}
 		virtual ~AbstractWatchHandler() {}
-		PWatchHandler next;
+		///next handle in the chain, do not touch it.
+		AbstractWatchHandler *next;
 	};
 
+	///Adds abstract watch handler
+	/**
+	 * @param h pointer to handler.
+	 * @retval true handler was not added, future is already resolved, however, the function release() is called
+	 * @retval false handler was added and waiting
+	 */
+	bool addHandler(AbstractWatchHandler *h);
 
-	void addHandler(AbstractWatchHandler *h);
-	bool removeHandler(AbstractWatchHandler *h);
 
+	//typedef std::unique_lock<std::mutex> Sync;
 
-	typedef std::unique_lock<std::mutex> Sync;
-
-	PWatchHandler watchChain = nullptr;
+	std::atomic<AbstractWatchHandler *> watchChain;
+	std::atomic<int> rslv_lock;
 	const T *value = nullptr;
 	std::exception_ptr exception;
 	unsigned char valueBuffer[sizeof(T)];
-	std::mutex lock;
+
+	//std::mutex lock;
 
 	template<typename Fn, typename ValueType>
-	void resolve(const Fn &fn, const ValueType &value);
+	bool resolve(const Fn &fn, const ValueType &value, AbstractWatchHandler *skip=nullptr);
+	bool autoresolve(AbstractWatchHandler *skip=nullptr);
 
 	class WaitHandler;
 	template<typename Fn> class WaitHandlerAwait;
@@ -211,6 +227,18 @@ protected:
 	}
 	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t)) {
 		return fn(t);
+	}
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn()) {
+		return fn();
+	}
+
+	bool lockResolve() {
+		int expected = 0;
+		return rslv_lock.compare_exchange_strong(expected,1);
+	}
+	bool commitResolve() {
+		int expected = 1;
+		return rslv_lock.compare_exchange_strong(expected,2);
 	}
 
 
@@ -243,7 +271,7 @@ public:
 	///Create and initialize future variable (the shared state)
 	Future();
 	///Create uninitialized future variable. It cannot be used until someone assign it a value
-	Future(std::nullptr_t) {}
+	Future(std::nullptr_t);
 	///Create already resolved future variable
 	static Future resolve(const T &val);
 	///Create already resolved future variable
@@ -291,10 +319,9 @@ public:
 	/** Function blocks until the future is set
 	 */
 	void wait() const;
-	///Wait for specified time
-	template<typename Dur> bool wait_for(Dur &&dur);
-	///Wait until specified time
-	template<typename Time> bool wait_until(Time &&dur);
+
+	std::shared_ptr<WaitableEvent> create_waitable_event();
+
 	///Asynchronous waiting
 	/**
 	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
@@ -444,39 +471,75 @@ public:
 
 template<typename T>
 template<typename Fn, typename ValueType>
-void FutureValue<T>::resolve(const Fn &fn, const ValueType &value) {
-	while (watchChain != nullptr) {
-		PWatchHandler z = watchChain;
-		watchChain = z->next;
-		lock.unlock();
-		(z->*fn)(value);
-		z->release();
-		lock.lock();
+bool FutureValue<T>::resolve(const Fn &fn, const ValueType &value, AbstractWatchHandler *skip) {
+	//walks through handlers and executes them with the value
+	//it can also skip one handler, if specified by an argument
+	bool skipped = false;
+	//we fetch list of handlers by atomic exchange
+	//this also sets waitChain to null and prevents conflicts during the resolve procedure
+
+	//note there is no remove function so we can do this with no expected problems
+
+	AbstractWatchHandler *chain = watchChain.exchange(nullptr);
+
+	//walk the chain
+	while (chain != nullptr) {
+		AbstractWatchHandler *z = chain;
+		chain = z->next;
+		//skip handler if equal
+		if (z != skip) {
+			(z->*fn)(value);
+			z->release();
+		} else {
+			//report skipped state if skipped
+			skipped = true;
+		}
+	}
+	//return skipped state (true = skipped, not called)
+	return skipped;
+}
+
+template<typename T> bool FutureValue<T>::autoresolve(AbstractWatchHandler *skip) {
+	//this is called when added handler need to ensure, that was not added right after resolution
+	if (is_resolved()) {
+		//so depend on how future is resolved, call apropriate resolve function
+		if (value) {
+			return resolve(&AbstractWatchHandler::onValue, *value, skip);
+		} else if (exception) {
+			return resolve(&AbstractWatchHandler::onException, exception, skip);
+		} else {
+			return true;
+		}
+	} else {
+		//future is not resolved, return false
+		return false;
 	}
 }
 
 template<typename T>
 void FutureValue<T>::set(const T &v) {
-	Sync _(lock);
-	if (is_resolved()) return;
+	if (!lockResolve()) return;
 
 	value = new (valueBuffer) T(v);
-	resolve(&AbstractWatchHandler::onValue, *value);
+	if (commitResolve()) {
+		resolve(&AbstractWatchHandler::onValue, *value);
+	}
 }
 template<typename T>
 void FutureValue<T>::set(T &&v) {
-	Sync _(lock);
-	if (is_resolved()) return;
+	if (!lockResolve()) return;
 
 	value = new (valueBuffer) T(std::move(v));
-	resolve(&AbstractWatchHandler::onValue, *value);
+	if (commitResolve()) {
+		resolve(&AbstractWatchHandler::onValue, *value);
+	}
 
 }
 
 template<typename T>
 inline FutureValue<T>::~FutureValue() {
-	Sync _(lock);
-	if (watchChain != nullptr) {
+	lockResolve();
+	if (watchChain.load(std::memory_order_acquire) != nullptr) {
 		resolve(&AbstractWatchHandler::onException, std::make_exception_ptr(UnresolvedFutureExcepton()));
 	}
 	if (value) value->~T();
@@ -492,32 +555,8 @@ inline void FutureValue<T>::set(FutureValue<T>& other) {
 }
 
 template<typename T>
-inline bool FutureValue<T>::removeHandler(AbstractWatchHandler *handler) {
-	Sync _(lock);
-	if (handler == watchChain) {
-		PWatchHandler x = watchChain;
-		watchChain=watchChain->next;
-		x->release();
-		return true;
-	} else {
-		PWatchHandler x = watchChain;
-		while (x->next != nullptr && x->next != handler) {
-			x= x->next;
-		}
-		if (x->next != nullptr) {
-			PWatchHandler y = x->next;
-			x->next = x->next->next;
-			y->release();
-			return true;
-		} else {
-			return false;
-		}
-	}
-}
-
-template<typename T>
 inline bool FutureValue<T>::is_resolved() const {
-	return value != nullptr  || exception != nullptr;
+	return rslv_lock.load(std::memory_order_acquire) == 2;
 }
 
 template<typename T>
@@ -534,17 +573,18 @@ inline FutureValue<T>::operator const T&() const {
 
 template<typename T>
 inline bool FutureValue<T>::is_rejected() const {
-	return exception != nullptr;
+	return is_resolved() && exception != nullptr;
 }
 
 
 template<typename T>
 void FutureValue<T>::reject(const std::exception_ptr &exception) {
-	Sync _(lock);
-	if (is_resolved()) return;
+	if (!lockResolve()) return;
 
 	this->exception =exception;
-	resolve(&AbstractWatchHandler::onException, exception);
+	if (commitResolve()) {
+		resolve(&AbstractWatchHandler::onException, exception);
+	}
 }
 
 template<typename T>
@@ -560,127 +600,157 @@ void FutureValue<T>::reject() {
 template<typename T>
 class FutureValue<T>::WaitHandler: public FutureValue<T>::AbstractWatchHandler {
 public:
-	virtual void onValue(const T &value) noexcept(true) {
+	virtual void onValue(const T &) noexcept(true) {
+		//nothing there, actually we trigger on release()
+	}
+	virtual void onException(const std::exception_ptr &) noexcept(true) {
+		//nothing there, actually we trigger on release()
+	}
+	virtual void release() {
+		//release is called when handler is removed from the chain
+		//this is our chance to notify waiting thread
+		std::unique_lock<std::mutex> _(lock);
 		fired = true;
 		condVar.notify_all();
 	}
-	virtual void onException(const std::exception_ptr &exception) noexcept(true) {
-		fired = true;
-		condVar.notify_all();
-	}
-	virtual void release() {}
 
 	std::condition_variable condVar;
+	std::mutex lock;
 	bool fired = false;
 };
 
 template<typename T>
 inline void FutureValue<T>::wait() const {
-	Sync _(lock);
+
+	//no wait if resolved
 	if (is_resolved()) return;
+	//wait handler (statically allocated)
 	WaitHandler wh;
-	addHandler(&wh);
-	wh.condVar.wait(_,[=]{return wh.fired;});
-	//this required because WaitHandler can be removed incidentaly sooner
-	//but during resolve phase, when the future is already resolved, but handler
-	//has not been notified yet. We need remove handler before the function exits
-	removeHandler(&wh);
+	//add handler, if true returned - already resolved
+	if (const_cast<FutureValue<T> *>(this)->addHandler(&wh)) return;
+	//acquire the lock
+	std::unique_lock<std::mutex> mx(wh.lock);
+	//wait for being fired.
+	wh.condVar.wait(mx,[&]{return wh.fired;});
 }
 
 
 
 template<typename T>
-inline void FutureValue<T>::addHandler(AbstractWatchHandler *h) {
+inline bool FutureValue<T>::addHandler(AbstractWatchHandler *h) {
 
-	h->next = watchChain;
-	watchChain = h;
+	//there must be deterministic way to detect, whether the handler would be called
+	//in current thread or in different thread.
 
+	//calling handler in current thread is forbidden, function must reject the handler
+	//and return true as "already resolved" (see await() )
+
+	//the handler is still created and function is copied into it, but will not be called
+	//on already resolved state
+
+	//because we are operating in lockfree environment, the possible race condition is
+	//solved by making varions checks in sequential order
+
+	AbstractWatchHandler *expected;
+	do {
+		//check is resolved state, which is atomic.
+		//if (is_resolved()) {
+			//in case, that future is already resolved, do not call the handler
+			//instead release it
+			//h->release();
+			//and returns "already resolved state"
+			//return true;
+		//}
+		//initialize expected variable, variable contains expected top handler
+		expected = watchChain.load(std::memory_order_acquire);
+		//initialize next pointer
+		h->next = expected;
+		//try to exchange top handler with new handler (lockfree push)
+		//repeate cycle if fails - other addHandler is called, or future is being resolved now
+	} while (!watchChain.compare_exchange_weak(expected, h));
+
+	//we added handler to handler chain, but if the future is already resolved
+	//the handler leaks
+
+	//autoresolve resolves all handler in chain when future is already resolved
+	bool b = autoresolve(h);
+	//b = true indicates that handler was not called yet
+	//if so, release it now
+	if (b) h->release();
+	//returns true, as "already resolved", false otherwise (handler was called by other thread)
+	return b;
 }
 
 template<typename T>
-template<typename Dur>
-inline bool FutureValue<T>::wait_for(Dur&& dur)  {
-	Sync _(lock);
-	if (is_resolved()) return true;
-	WaitHandler wh;
-	addHandler(&wh);
-	bool res = wh.condVar.wait_for(_,std::forward<Dur>(dur),[=]{return wh.fired();});
-	removeHandler(&wh);
-	return res;
+inline std::shared_ptr<WaitableEvent> FutureValue<T>::create_waitable_event()  {
+	std::shared_ptr<WaitableEvent> ev (std::make_shared<WaitableEvent>(false));
+
+	auto fn = [ev] {
+		ev->signal();
+	};
+
+	then(fn,fn);
+
+	return ev;
+
+
 }
 
-template<typename T>
-template<typename Time>
-inline bool FutureValue<T>::wait_until(Time&& tm)  {
-	Sync _(lock);
-	if (is_resolved()) return true;
-	WaitHandler wh;
-	addHandler(&wh);
-	bool res = wh.condVar.wait_until(_,std::forward<Time>(tm),[=]{return wh.fired();});
-	removeHandler(&wh);
-	return res;
-}
 
 template<typename T>
 template<typename Fn>
 class FutureValue<T>::WaitHandlerAwait: public FutureValue<T>::AbstractWatchHandler {
 public:
-	WaitHandlerAwait(const Fn &fn):fn(fn) {}
+	WaitHandlerAwait(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 	virtual void onValue(const T &value) noexcept(true) {callCb(fn,value);}
 	virtual void onException(const std::exception_ptr &) noexcept(true) {}
 private:
-	Fn fn;
+	std::remove_reference_t<Fn> fn;
 };
 
 template<typename T>
 template<typename Fn>
 class FutureValue<T>::WaitHandlerCatch: public FutureValue<T>::AbstractWatchHandler {
 public:
-	WaitHandlerCatch(const Fn &fn):fn(fn) {}
+	WaitHandlerCatch(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 	virtual void onValue(const T &) noexcept(true) {}
 	virtual void onException(const std::exception_ptr &exception) noexcept(true) {callCbExcept(fn,exception);}
 private:
-	Fn fn;
+	std::remove_reference_t<Fn> fn;
 };
 
 template<typename T>
 template<typename Fn1,typename Fn2>
 class FutureValue<T>::WaitHandlerAwaitCatch: public FutureValue<T>::AbstractWatchHandler {
 public:
-	WaitHandlerAwaitCatch(const Fn1 &fn1,const Fn2 &fn2):fn1(fn1),fn2(fn2) {}
+	WaitHandlerAwaitCatch(Fn1 &&fn1,Fn2 &&fn2):fn1(std::forward<Fn1>(fn1)),fn2(std::forward<Fn2>(fn2)) {}
 	virtual void onValue(const T &value) noexcept(true) {callCb(fn1,value);}
 	virtual void onException(const std::exception_ptr &exception) noexcept(true) {callCbExcept(fn2,exception);}
 private:
-	Fn1 fn1;
-	Fn2 fn2;
+	std::remove_reference_t<Fn1> fn1;
+	std::remove_reference_t<Fn2> fn2;
 };
 
 
 template<typename T>
 template<typename Fn>
 inline bool FutureValue<T>::await(Fn&& fn) {
-	Sync _(lock);
 	if (is_resolved()) return true;
-	addHandler(new WaitHandlerAwait<Fn>(std::forward<Fn>(fn)));
-	return false;
+	return addHandler(new WaitHandlerAwait<Fn >(std::forward<Fn>(fn)));
 }
 
 template<typename T>
 template<typename Fn, typename ExceptFn>
 inline bool FutureValue<T>::await( Fn&& fn, ExceptFn&& exceptFn) {
-	Sync _(lock);
 	if (is_resolved()) return true;
-	addHandler(new WaitHandlerAwaitCatch<Fn, ExceptFn>(std::forward<Fn>(fn),std::forward<ExceptFn>(exceptFn)));
-	return false;
+	return addHandler(new WaitHandlerAwaitCatch<Fn , ExceptFn >(std::forward<Fn>(fn),std::forward<ExceptFn>(exceptFn)));
 }
 
 template<typename T>
 template<typename ExceptFn>
 inline bool FutureValue<T>::await_catch(ExceptFn&& exceptFn) {
-	Sync _(lock);
 	if (is_resolved()) return true;
-	addHandler(new WaitHandlerCatch<ExceptFn>(std::forward<ExceptFn>(exceptFn)));
-	return false;
+	return addHandler(new WaitHandlerCatch<ExceptFn >(std::forward<ExceptFn>(exceptFn)));
 }
 
 template<typename T>
@@ -844,12 +914,12 @@ template<typename T> void Future<T>::reject() {
 template<typename T> void Future<T>::wait() const {
 	v->wait();
 }
-template<typename T> template<typename Dur> bool Future<T>::wait_for(Dur &&dur) {
-	return v->wait_for(dur);
+
+template<typename T> inline std::shared_ptr<WaitableEvent> Future<T>::create_waitable_event() {
+	return v->create_waitable_event();
 }
-template<typename T> template<typename Time> bool Future<T>::wait_until(Time &&dur) {
-	return v->wait_until(dur);
-}
+
+
 template<typename T> template<typename Fn> bool Future<T>::await(const Fn &fn) {
 	return v->await(fn);
 }

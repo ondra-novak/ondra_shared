@@ -88,7 +88,7 @@ public:
 	template<typename Duration>
 	bool wait_for(const Duration &dur) {
 		std::unique_lock<std::mutex> _(mtx);
-		return waiter.wait_until(_,dur, [=]{return counter == 0;});
+		return waiter.wait_for(_,dur, [=]{return counter == 0;});
 	}
 
 
