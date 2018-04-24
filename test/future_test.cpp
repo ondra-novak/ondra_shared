@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include "../future.h"
+#include "../apply.h"
 
 using namespace ondra_shared;
 
@@ -58,8 +59,22 @@ auto testChain(Future<int> &f) {
 }
 
 
+template<typename Fn, typename... Args>
+void callInLambda(Fn &&fn, Args && ... args) {
+	auto z = std::make_tuple(std::forward<Args>(args)...);
+	std::remove_reference_t<Fn> xfn(fn);
+	auto zfn = [z,xfn]{
+		apply(xfn,z);
+	};
+	zfn();
+}
+
+
 int main(int argc, char **argv) {
 
+	callInLambda([](int a, int b, const char *c, double d){
+		std::cout << a << b << c << d << std::endl;
+	},10,20,"ahoj",32.23);
 
 	testVal1.await([](int v) {
 		std::cout << "Handle1: " << v << std::endl;
