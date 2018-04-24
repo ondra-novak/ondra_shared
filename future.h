@@ -246,7 +246,7 @@ protected:
 template<typename T> class Future;
 
 
-template<typename T, typename X>
+template<typename X>
 class FutureFromType;
 
 
@@ -263,9 +263,9 @@ class Future {
 public:
 	typedef std::shared_ptr<FutureValue<T> > PFutureValue;
 
-	template<typename Fn> using RetFnThen = typename FutureFromType<T, decltype(std::declval<Fn>()(std::declval<T>()))>::type;
-	template<typename Fn> using RetFnCatch = typename FutureFromType<T, decltype(std::declval<Fn>()(std::declval<std::exception_ptr>()))>::type;
-	template<typename Fn> using RetFnThenVoid = typename FutureFromType<T, decltype(std::declval<Fn>()())>::type;
+	template<typename Fn> using RetFnThen = typename FutureFromType< decltype(std::declval<Fn>()(std::declval<T>()))>::type;
+	template<typename Fn> using RetFnCatch = typename FutureFromType< decltype(std::declval<Fn>()(std::declval<std::exception_ptr>()))>::type;
+	template<typename Fn> using RetFnThenVoid = typename FutureFromType< decltype(std::declval<Fn>()())>::type;
 
 
 	///Create and initialize future variable (the shared state)
@@ -441,14 +441,11 @@ protected:
 	PFutureValue v;
 };
 
-template<typename T, typename R> class FutureFromType {
+template<typename R> class FutureFromType {
 public: typedef Future<typename std::remove_reference<R>::type> type;
 };
-template<typename T, typename R> class FutureFromType<T, Future<R> > {
+template<typename R> class FutureFromType< Future<R> > {
 public: typedef Future<R> type;
-};
-template<typename T> class FutureFromType<T, std::exception_ptr> {
-public: typedef Future<T> type;
 };
 
 struct FutureEmptyValue{};
