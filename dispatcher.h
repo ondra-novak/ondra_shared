@@ -25,34 +25,55 @@ protected:
 public:
 	///starts message loop. Function processes messages
 	void run() {
+		while(pump()) {}
+	}
+
+	///Checks whether message queu is empty
+	/**
+	 * @retval true is empty
+	 * @retval false there is a message
+	 *
+	 * You can use this function to check queue before you call pump(). If the result is false,
+	 * the function pump() will not block waiting for the message
+	 *
+	 */
+	bool empty() const {
+		return queue.empty();
+	}
+
+	///pumps one message. It blocks waiting for the message when the queue is empty
+	/**
+	 *
+	 * @retval true a single message processed
+	 * @retval false the quit message extracted
+	 */
+	bool pump() {
 		Msg a = queue.pop();
-		while (a != nullptr) {
+		if (a != nullptr) {
 			a();
-			a = nullptr;
-			a = queue.pop();
+			return true;
+		} else {
+			return false;
 		}
 	}
 
-	///pump one message
-	/**
-	 * @retval true one message pumped
-	 * @retval false there were no message to pump
-	 */
-	bool pump() {
-		return queue.try_pump([](Msg msg){
-			msg();
-		});
-	}
 
 	///quits the dispatcher
 	/**
-	 * Dispatcher is quit once the dispatching thread returns to the pump
+	 * Post special message to the queue requesting the dispatcher to stop processing the messages
+	 *
+	 * Special message is not processed during the pump, it only causes, that pump() returns false.
 	 *
 	 */
 	void quit() {
 		queue.push(nullptr);
 	}
 
+
+	///Dispatch the function
+	void dispatch(const Msg &msg) {
+		queue.push(msg);
+	}
 
 	///dispatch function
 	void operator<<(const Msg &msg) {

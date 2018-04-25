@@ -8,6 +8,7 @@
 #include <thread>
 #include <iostream>
 #include <sstream>
+#include "../worker.h"
 #include "../future.h"
 #include "../apply.h"
 
@@ -58,6 +59,48 @@ auto testChain(Future<int> &f) {
 	});
 }
 
+auto testChain2(Future<int> &f, Worker w) {
+	return (
+
+	!( //try
+		f >> w >> [](int x) {
+			//print test
+			std::cout << "(worker) Value:" << x << std::endl;
+			return x;
+		} >> w >> [](int x) {
+			//convert
+			std::ostringstream sbuff;
+			sbuff << x;
+			return sbuff.str();
+		} >> w >> [](std::string a) {
+			//print test
+			std::cout << "(worker) Value as string: " << a << std::endl;
+			return a;
+		} >> w >> [](std::string a) {
+			Future<std::string> z;
+			std::thread thr([z,a]() mutable {
+				std::this_thread::sleep_for(std::chrono::seconds(1));
+				z.set("Delayed "+a);
+			});
+			thr.detach();
+			return z;  //return std::string
+		} >> w >> [](std::string a) {
+			//print test
+			std::cout << "(worker) Value as string (2): " << a << std::endl;
+			return a;
+		}
+
+	) >>  w >> [](const std::exception_ptr &e) { //catch (return std::string)
+		try {
+			std::rethrow_exception(e);
+		} catch (std::exception &e) {
+			return std::string("Exception: ")+e.what();
+		}
+	}
+
+	);
+}
+
 
 template<typename Fn, typename... Args>
 void callInLambda(Fn &&fn, Args && ... args) {
@@ -71,6 +114,7 @@ void callInLambda(Fn &&fn, Args && ... args) {
 
 
 int main(int argc, char **argv) {
+
 
 	callInLambda([](int a, int b, const char *c, double d){
 		std::cout << a << b << c << d << std::endl;
@@ -115,6 +159,11 @@ int main(int argc, char **argv) {
 	Future<int> f3;
 	auto f4 = testChain(f3);
 	f3.reject(std::make_exception_ptr(std::runtime_error("Rejected by exception")));
-	std::cout << "Future1:" << f4.get() << std::endl;
+	std::cout << "Future2:" << f4.get() << std::endl;
+
+	Future<int> f8;
+	auto f9 = testChain2(f8,Worker::create());
+	f8.set(142);
+	std::cout << "Future2:" << f9.get() << std::endl;
 
 }

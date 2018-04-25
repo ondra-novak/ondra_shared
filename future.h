@@ -34,7 +34,6 @@ class FutureValue {
 public:
 
 
-	template<typename Fn> class CallFnSetValue;
 
 	///Constructs uninitialized future variable
 	FutureValue():watchChain(nullptr),rslv_lock(0) {}
@@ -153,8 +152,6 @@ public:
 	template<typename Fn, typename ExceptFn> bool then(Fn &&fn, ExceptFn &&exceptFn);
 
 	template<typename ExceptFn> bool then_catch(ExceptFn &&exceptFn);
-
-	template<typename Fn> CallFnSetValue<Fn> operator <<=(Fn &&fn);
 
 	template<typename Arg>	void operator << (Arg && arg);
 
@@ -308,6 +305,7 @@ public:
 	 * becomes resolved
 	 */
 	void set(Future<T> value);
+
 	///Reject the future with an exception
 	/**
 	 * @param exception exception
@@ -408,13 +406,6 @@ public:
 
 	template<typename ExceptFn> Future then_catch(const ExceptFn &exceptFn);
 
-	///Creates a function which - when is called - uses return value of the specifed function to set the future value
-	/**
-	 *
-	 * @param fn function to bind with the future
-	 * @return function bound with the future
-	 */
-	template<typename Fn> typename FutureValue<T>::template CallFnSetValue<Fn> operator <<=(Fn &&fn);
 
 	///Alternative way to set value
 	template<typename Arg>	void operator << (Arg && arg);
@@ -786,57 +777,19 @@ inline bool FutureValue<T>::then_catch(ExceptFn&& exceptFn) {
 	}
 }
 
-template<typename T> template<typename Fn>
-class FutureValue<T>::CallFnSetValue {
-
-	template<typename ... Args>
-	static void test_fn_void(std::true_type);
-
-public:
-	CallFnSetValue(FutureValue<T> &owner, Fn &&fn):owner(owner), fn(std::forward<Fn>(fn)) {}
-
-	template<typename... Args>
-	auto operator()(Args &&... args) -> decltype(test_fn_void(std::declval<typename std::is_void<decltype(std::declval<Fn>()(std::forward<Args>(args)...))>::type>())){
-		try {
-			fn(std::forward<Args>(args)...);owner.set(T());
-		} catch (...) {
-			owner.reject();
-		}
-	}
-	template<typename... Args>
-	auto operator()(Args &&... args) -> decltype(std::declval<FutureValue<T> >().set(std::declval<Fn>()(std::forward<Args>(args)...))) {
-		try {
-			owner.set(fn(std::forward<Args>(args)...));
-		} catch (...) {
-			owner.reject();
-		}
-	}
-protected:
-	FutureValue<T> &owner;
-	Fn fn;
-};
-
-
-template<typename T> template<typename Fn>
-typename FutureValue<T>::template CallFnSetValue<Fn> FutureValue<T>::operator <<=(Fn &&fn) {
-	return CallFnSetValue<Fn>(*this,std::forward<Fn>(fn));
-}
-
-template<typename T>
-FutureExceptionalState<FutureValue<T> >  FutureValue<T>::operator !() {
-	return FutureExceptionalState<FutureValue<T> >(*this);
-}
-
 template<typename FT> class FutureExceptionalState {
 public:
 	FutureExceptionalState(FT &owner):owner(owner) {}
-	template<typename Fn> auto operator >> (Fn &&fn) -> decltype(std::declval<FT>().then_catch(fn)) {
+	template<typename Fn> auto operator >> (Fn &&fn)
+		-> typename FutureFromType<decltype(std::declval<Fn>()(std::declval<std::exception_ptr>()))>::type {
 		return owner.then_catch(fn);
 	}
 	operator bool() const {return !owner.is_resolved();}
 	void operator << (const std::exception_ptr &ptr) {
 		owner.reject(ptr);
 	}
+
+	auto getFuture() const {return owner;}
 protected:
 	FT &owner;
 };
@@ -898,9 +851,9 @@ template<typename T> void Future<T>::set(T &&value) {
 	v->set(std::move(value));
 }
 template<typename T> void Future<T>::set(Future<T> value) {
-	Future<T> me(this);
-	value->v->then([=](const T &v){me.set(v);}
-	            ,[=](const std::exception_ptr &v) {me.reject(v);});
+	Future<T> me(*this);
+	value.v->then([=](const T &v) mutable {me.set(v);}
+	            ,[=](const std::exception_ptr &v) mutable {me.reject(v);});
 }
 template<typename T> void Future<T>::reject(const std::exception_ptr &exception) {
 	v->reject(exception);
@@ -928,8 +881,12 @@ template<typename T> template<typename ExceptFn> bool Future<T>::await_catch(con
 }
 template<typename T> template<typename Fn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(const Fn &fn) {
 	typename Future<T>::template RetFnThen<Fn> f;
-	v->then([f,cfn=Fn(fn)](const T &val) mutable {
-		(f<<=cfn)(val);
+	v->then([f,fn=Fn(fn)](const T &val) mutable {
+		try {
+			f.set(fn(val));
+		} catch (...) {
+			f.reject();
+		}
 	},[f](const std::exception_ptr &e) mutable  {
 		f.reject(e);
 	});
@@ -937,17 +894,29 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 }
 template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(const Fn &fn, const ExceptFn &exceptFn) {
 	typename Future<T>::template RetFnThen<Fn>  f;
-	v->then([f,cfn=Fn(fn)](const T &val) mutable {
-		(f<<=cfn)(val);
+	v->then([f,fn=Fn(fn)](const T &val) mutable {
+		try {
+			f.set(fn(val));
+		} catch(...) {
+			f.reject();
+		}
 	},[f,efn=ExceptFn(exceptFn)](const std::exception_ptr &e) mutable  {
-		(f<<=efn)(e);
+		try {
+			f.set(efn(e));
+		} catch (...) {
+			f.reject();
+		}
 	});
 	return f;
 }
 template<typename T> template<typename Fn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(const Fn &fn) {
 	typename Future<T>::template RetFnThenVoid<Fn> f;
-	v->then([f,cfn=Fn(fn)](const T &) mutable {
-		(f<<=cfn)();
+	v->then([f,fn=Fn(fn)](const T &) mutable {
+		try {
+			f.set(fn());
+		} catch (...) {
+			f.reject();
+		}
 	},[f](const std::exception_ptr &e) mutable  {
 		f.reject(e);
 	});
@@ -955,18 +924,23 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 }
 template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(const Fn &fn, const ExceptFn &exceptFn) {
 	typename Future<T>::template RetFnThenVoid<Fn>  f;
-	v->then([f,cfn=Fn(fn)](const T &) mutable {
-		(f<<=cfn)();
+	v->then([f,fn=Fn(fn)](const T &) mutable {
+		try {
+			f.set(fn());
+		} catch (...) {
+			f.reject();
+		}
 	},[f,efn=ExceptFn(exceptFn)](const std::exception_ptr &e) mutable {
-		(f<<=efn)(e);
+		try {
+			f.set(efn(e));
+		} catch (...) {
+			f.reject();
+		}
 	});
 	return f;
 }
 template<typename T> template<typename ExceptFn> Future<T> Future<T>::then_catch(const ExceptFn &exceptFn) {
 	return then([=](const T &x) {return x;},exceptFn);
-}
-template<typename T> template<typename Fn> typename FutureValue<T>::template CallFnSetValue<Fn> Future<T>::operator <<=(Fn &&fn) {
-	return typename FutureValue<T>::template CallFnSetValue<Fn>(*v,std::forward<Fn>(fn));
 }
 template<typename T> template<typename Arg>	void Future<T>::operator << (Arg && arg) {
 	set(std::forward<Arg>(arg));

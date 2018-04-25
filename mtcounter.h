@@ -112,6 +112,23 @@ public:
 		}
 	}
 
+	///Sets the counter when it contains expected value
+	/**
+	 * @param expected expected value
+	 * @param desired desired value
+	 * @retval true value set
+	 * @retval false value was not set
+	 *
+	 * @note only uses compare_exchange_strong function to atomically initialize the counter
+	 */
+	bool setCounterWhen(unsigned int expected, unsigned int desired, std::memory_order m = std::memory_order_seq_cst) {
+		bool r = this->counter.compare_exchange_strong(expected,desired,m);
+		if (r && desired == 0) {
+			waiter.notify_all();
+		}
+		return r;
+	}
+
 	///deprecated function for compatibility
 	bool zeroWait(unsigned int timeout_ms) {return wait(timeout_ms);}
 	///deprecated function for compatibility

@@ -28,7 +28,7 @@ public:
 	Msg pop();
 
 	///Determines whether queue is empty
-	bool empty();
+	bool empty() const;
 
 	///checks the queue, If there is an message, it calls the function with the message as an argument
 	/**
@@ -89,7 +89,7 @@ public:
 
 protected:
 	QueueImpl queue;
-	std::mutex lock;
+	mutable std::mutex lock;
 	std::condition_variable condvar;
 	typedef std::unique_lock<std::mutex> Sync;
 };
@@ -119,7 +119,7 @@ inline Msg MsgQueue<Msg, QueueImpl>::pop() {
 }
 
 template<typename Msg, typename QueueImpl>
-inline bool MsgQueue<Msg, QueueImpl>::empty() {
+inline bool MsgQueue<Msg, QueueImpl>::empty() const{
 	Sync _(lock);
 	return queue.empty();
 }
