@@ -4,7 +4,11 @@
 #include <atomic>
 #include <cstddef>
 
+
+#include "refcnt.h"
 #include "waitableEvent.h"
+#include "stringview.h"
+
 
 namespace ondra_shared {
 
@@ -152,6 +156,8 @@ public:
 	template<typename Fn, typename ExceptFn> bool then(Fn &&fn, ExceptFn &&exceptFn);
 
 	template<typename ExceptFn> bool then_catch(ExceptFn &&exceptFn);
+
+	template<typename Fn> void finally(Fn &&fn);
 
 	template<typename Arg>	void operator << (Arg && arg);
 
@@ -328,7 +334,7 @@ public:
 	 * @retval true future is already resolved, so code will not be executed
 	 * @retval false future is not resolved, the code will be executed
 	 */
-	template<typename Fn> bool await(const Fn &fn);
+	template<typename Fn> bool await(Fn &&fn);
 	///Asynchronous waiting
 	/**
 	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
@@ -338,7 +344,7 @@ public:
 	 * @retval true future is already resolved, so code will not be executed
 	 * @retval false future is not resolved, the code will be executed
 	 */
-	template<typename Fn, typename ExceptFn> bool await(const Fn &fn, const ExceptFn &exceptFn);
+	template<typename Fn, typename ExceptFn> bool await(Fn &&fn, ExceptFn &&exceptFn);
 	///Asynchronous waiting
 	/**
 	 * Performs waiting asynchronously. Suply the code which is executed once the value is set.
@@ -348,7 +354,7 @@ public:
 	 * @retval false future is not resolved, the code will be executed
 	 *
 	 */
-	template<typename ExceptFn> bool await_catch(const ExceptFn &exceptFn);
+	template<typename ExceptFn> bool await_catch(ExceptFn &&exceptFn);
 	///Specifies function, which is called upon future resolution.
 	/**
 	 *
@@ -359,7 +365,7 @@ public:
 	 * @note rejected state of the source future is directly transfered to returning future
 
 	 */
-	template<typename Fn> RetFnThen<Fn> then(const Fn &fn);
+	template<typename Fn> RetFnThen<Fn> then(Fn &&fn);
 	///Specifies function, which is called upon future resolution.
 	/**
 	 *
@@ -370,7 +376,7 @@ public:
 	 * @note rejected state of the source future is directly transfered to returning future
 
 	 */
-	template<typename Fn> RetFnThenVoid<Fn> then(const Fn &fn);
+	template<typename Fn> RetFnThenVoid<Fn> then(Fn &&fn);
 	///Specifies function, which is called upon future resolution.
 	/**
 	 *
@@ -382,7 +388,7 @@ public:
 
 
 	 */
-	template<typename Fn, typename ExceptFn> RetFnThen<Fn> then(const Fn &fn, const ExceptFn &exceptFn);
+	template<typename Fn, typename ExceptFn> RetFnThen<Fn> then(Fn &&fn, ExceptFn &&exceptFn);
 	///Specifies function, which is called upon future resolution.
 	/**
 	 *
@@ -394,7 +400,7 @@ public:
 
 
 	 */
-	template<typename Fn, typename ExceptFn> RetFnThenVoid<Fn> then(const Fn &fn, const ExceptFn &exceptFn);
+	template<typename Fn, typename ExceptFn> RetFnThenVoid<Fn> then(Fn &&fn, ExceptFn &&exceptFn);
 	///Specifies function, which is called upon the future rejection
 	/**
 	 * @param excepttFn function to call when future is in rejected state. The function must accept exception_ptr.
@@ -404,7 +410,10 @@ public:
 	 * @note if the future is not in rejected state, the value is transfered to the returning future
 	 */
 
-	template<typename ExceptFn> Future then_catch(const ExceptFn &exceptFn);
+
+	template<typename ExceptFn> Future then_catch(ExceptFn &&exceptFn);
+
+	template<typename Fn> Future finally( Fn &&fn);
 
 
 	///Alternative way to set value
@@ -425,6 +434,15 @@ public:
 	bool is_resolved() const;
 	///Returns true if future is rejected
 	bool is_rejected() const;
+
+
+	template<typename Iteratable>
+	static Future<std::vector<T> > all(Iteratable &&flist);
+	static Future<std::vector<T> > all(std::initializer_list<Future<T> > &&flist);
+
+	template<typename Iteratable>
+	static Future race(Iteratable &&flist);
+	static Future race(std::initializer_list<Future<T> > &&flist);
 
 
 protected:
@@ -870,18 +888,18 @@ template<typename T> inline std::shared_ptr<WaitableEvent> Future<T>::create_wai
 }
 
 
-template<typename T> template<typename Fn> bool Future<T>::await(const Fn &fn) {
-	return v->await(fn);
+template<typename T> template<typename Fn> bool Future<T>::await(Fn &&fn) {
+	return v->await(std::forward<Fn>(fn));
 }
-template<typename T> template<typename Fn, typename ExceptFn> bool Future<T>::await(const Fn &fn, const ExceptFn &exceptFn) {
-	return v->await(fn, exceptFn);
+template<typename T> template<typename Fn, typename ExceptFn> bool Future<T>::await(Fn &&fn, ExceptFn &&exceptFn) {
+	return v->await(std::forward<Fn>(fn), std::forward<ExceptFn>(exceptFn));
 }
-template<typename T> template<typename ExceptFn> bool Future<T>::await_catch(const ExceptFn &exceptFn) {
-	return v->await_catch(exceptFn);
+template<typename T> template<typename ExceptFn> bool Future<T>::await_catch(ExceptFn &&exceptFn) {
+	return v->await_catch(std::forward<ExceptFn>(exceptFn));
 }
-template<typename T> template<typename Fn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(const Fn &fn) {
+template<typename T> template<typename Fn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(Fn &&fn) {
 	typename Future<T>::template RetFnThen<Fn> f;
-	v->then([f,fn=Fn(fn)](const T &val) mutable {
+	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &val) mutable {
 		try {
 			f.set(fn(val));
 		} catch (...) {
@@ -892,15 +910,15 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 	});
 	return f;
 }
-template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(const Fn &fn, const ExceptFn &exceptFn) {
+template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(Fn &&fn, ExceptFn &&exceptFn) {
 	typename Future<T>::template RetFnThen<Fn>  f;
-	v->then([f,fn=Fn(fn)](const T &val) mutable {
+	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &val) mutable {
 		try {
 			f.set(fn(val));
 		} catch(...) {
 			f.reject();
 		}
-	},[f,efn=ExceptFn(exceptFn)](const std::exception_ptr &e) mutable  {
+	},[f,efn=ExceptFn(std::forward<ExceptFn>(exceptFn))](const std::exception_ptr &e) mutable  {
 		try {
 			f.set(efn(e));
 		} catch (...) {
@@ -909,9 +927,9 @@ template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>
 	});
 	return f;
 }
-template<typename T> template<typename Fn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(const Fn &fn) {
+template<typename T> template<typename Fn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(Fn &&fn) {
 	typename Future<T>::template RetFnThenVoid<Fn> f;
-	v->then([f,fn=Fn(fn)](const T &) mutable {
+	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &) mutable {
 		try {
 			f.set(fn());
 		} catch (...) {
@@ -922,15 +940,15 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 	});
 	return f;
 }
-template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(const Fn &fn, const ExceptFn &exceptFn) {
+template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(Fn &&fn, ExceptFn &&exceptFn) {
 	typename Future<T>::template RetFnThenVoid<Fn>  f;
-	v->then([f,fn=Fn(fn)](const T &) mutable {
+	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &) mutable {
 		try {
 			f.set(fn());
 		} catch (...) {
 			f.reject();
 		}
-	},[f,efn=ExceptFn(exceptFn)](const std::exception_ptr &e) mutable {
+	},[f,efn=ExceptFn(std::forward<ExceptFn>(exceptFn))](const std::exception_ptr &e) mutable {
 		try {
 			f.set(efn(e));
 		} catch (...) {
@@ -939,8 +957,8 @@ template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>
 	});
 	return f;
 }
-template<typename T> template<typename ExceptFn> Future<T> Future<T>::then_catch(const ExceptFn &exceptFn) {
-	return then([=](const T &x) {return x;},exceptFn);
+template<typename T> template<typename ExceptFn> Future<T> Future<T>::then_catch(ExceptFn &&exceptFn) {
+	return then([=](const T &x) {return x;},std::forward<ExceptFn>(exceptFn));
 }
 template<typename T> template<typename Arg>	void Future<T>::operator << (Arg && arg) {
 	set(std::forward<Arg>(arg));
@@ -949,7 +967,25 @@ template<typename T> template<typename Fn> auto Future<T>::operator >> (Fn && fn
 	return then(fn);
 }
 
+template<typename T> template<typename Fn> void FutureValue<T>::finally(Fn &&fn) {
 
+	class Spec: public AbstractWatchHandler {
+	public:
+		Spec(Fn &&fn):fn(fn) {}
+		virtual void onValue(const T &) noexcept(true) override {fn();}
+		virtual void onException(const std::exception_ptr &) noexcept(true) override  {fn();}
+
+		std::remove_reference_t<Fn> fn;
+	};
+
+	addHandler(new Spec(fn));
+
+}
+
+template<typename T> template<typename Fn> Future<T> Future<T>::finally(Fn &&fn) {
+	v->finally(fn);
+	return *this;
+}
 template<typename T> bool Future<T>::is_resolved() const {
 	return v->is_resolved();
 }
@@ -957,7 +993,103 @@ template<typename T> bool Future<T>::is_rejected() const {
 	return v->is_rejected();
 }
 
+namespace _details {
+
+
+	///Function which tracks resolution of all futures
+	/**
+	 * Counts how many futures is resolved. Once all futures are resolved,
+	 * it picks results and resolves future containing vector of results
+	 */
+	template<typename T>
+	class AllFutureHelper {
+	public:
+
+		class SharedState: public RefCntObj{
+		public:
+			Future<std::vector<T> >result;
+			std::vector<Future<T> > flist;
+			std::atomic<unsigned int> remain;
+
+			SharedState():result(nullptr),remain(0) {}
+		};
+
+		RefCntPtr<SharedState> state;
+
+		AllFutureHelper(const Future<std::vector<T> >&result):state(new SharedState()) {
+			state->result = result;
+		}
+
+		void add(Future<T> f) {
+			++state->remain;
+			state->flist.push_back(f);
+			f.finally(*this);
+		}
+
+
+		void operator()() {
+			if (--state->remain == 0) {
+				std::vector<T> resultArr;
+				for (auto &&x: state->flist)
+					resultArr.push_back(x.get());
+				state->result << std::move(resultArr);
+			}
+		}
+	};
+
+template<typename T,typename Iteratable>
+Future<std::vector<T> > future_all_impl(Iteratable &&flist) {
+
+	Future<std::vector<T> > res;
+	AllFutureHelper<T> hlp(res);
+	for (auto &&x : flist) {
+		hlp.add(x);
+	}
+	return res;
 }
+
+template<typename T, typename Iteratable>
+Future<T> future_race_impl(Iteratable &&flist) {
+	//Race command is that easy.
+	//Because resolving already resolved future is not an error
+	//we can connect the target future with many sources. First resulve future resolves
+	//the target future, other will be ignored
+	Future<T> out;
+	for (auto &&x : flist) {
+		out << x;
+	}
+	return out;
+}
+
+}
+
+template<typename T>
+template<typename Iteratable>
+Future<std::vector<T> > Future<T>::all(Iteratable &&flist) {
+	return _details::future_all_impl(std::forward<Iteratable>(flist));
+}
+
+template<typename T>
+Future<std::vector<T> > Future<T>::all(std::initializer_list<Future<T> > &&flist) {
+	return _details::future_all_impl<T,std::initializer_list<Future<T> > >(std::forward<std::initializer_list<Future<T> > >(flist));
+}
+
+
+template<typename T>
+template<typename Iteratable>
+Future<T> Future<T>::race(Iteratable &&flist) {
+	return _details::future_race_impl(std::forward<Iteratable>(flist));
+}
+
+template<typename T>
+Future<T> Future<T>::race(std::initializer_list<Future<T> > &&flist) {
+	return _details::future_race_impl<T, std::initializer_list<Future<T> > >(std::forward<std::initializer_list<Future<T> > >(flist));
+}
+
+
+}
+
+
 
 
 #endif

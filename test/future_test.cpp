@@ -8,6 +8,10 @@
 #include <thread>
 #include <iostream>
 #include <sstream>
+#include <chrono>
+
+using namespace std::literals::chrono_literals;
+
 #include "../worker.h"
 #include "../future.h"
 #include "../apply.h"
@@ -114,7 +118,7 @@ void callInLambda(Fn &&fn, Args && ... args) {
 
 
 int main(int argc, char **argv) {
-
+/*
 
 	callInLambda([](int a, int b, const char *c, double d){
 		std::cout << a << b << c << d << std::endl;
@@ -166,4 +170,78 @@ int main(int argc, char **argv) {
 	f8.set(142);
 	std::cout << "Future2:" << f9.get() << std::endl;
 
+*/
+	///inicializace worker - vlakno v pozadi
+
+	auto w = Worker::create(0);
+
+	/// 3x spust asynchronni ulohu (zde jednoduche example)
+	/// worker ma 1 vlakno, takze ... fronta!
+
+	auto df1 = w >> []{
+			std::cout << "--- bezi df1 ---" << std::endl;
+			std::this_thread::sleep_for(600ms);
+			return std::string("ahoj");
+	};
+
+	auto df2 = w >> []{
+			std::cout << "--- bezi df2 ---" << std::endl;
+			std::this_thread::sleep_for(200ms);
+			return std::string("cago");
+	};
+
+	auto df3 = w >> []{
+			std::cout << "--- bezi df3 ---" << std::endl;
+			std::this_thread::sleep_for(100ms);
+			return std::string("belo");
+	} >> [](const std::string &res) {
+		return res + " silenci";
+	};
+
+	typedef decltype(df1) Fut;
+
+	///slouci vysledky do jednoho pole - zde jeste na urovni futures
+
+	auto dfall = Fut::all({df1,df2,df3});
+	auto dfirst = Fut::race({df1,df2,df3});
+
+	/// pockej na vysledek a vyzvedni ho
+	std::cout << "--- cekam ---" << std::endl;
+
+	auto result = dfall.get();
+	auto first = dfirst.get();
+
+	///zobraz
+
+	std::cout << result[0] << "," << result[1] << "," << result[2] << std::endl;
+	std::cout << "first:" << first << std::endl;
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -47,7 +47,7 @@ public:
 	 * @retval true a single message processed
 	 * @retval false the quit message extracted
 	 */
-	bool pump() {
+	bool pump() noexcept {
 		Msg a = queue.pop();
 		if (a != nullptr) {
 			a();
