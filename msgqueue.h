@@ -60,8 +60,8 @@ public:
 	 * @retval true pumped a message
 	 * @retval false there were no message and timeout ellapsed
 	 */
-	template< class Rep, class Period, class Fn>
-	bool pump_for(const std::chrono::duration<Rep, Period>& rel_time, Fn fn);
+	template< typename Duration, class Fn>
+	bool pump_for(Duration && rel_time, Fn fn);
 
 	///Pumps one message or blocks the thread for the given period of the time
 	/**
@@ -71,8 +71,8 @@ public:
 	 * @retval true pumped a message
 	 * @retval false there were no message and timeout ellapsed
 	 */
-	template< class Clock, class Duration, class Fn >
-	bool pump_until(const std::chrono::time_point<Clock, Duration>& timeout_time,Fn pred );
+	template< typename TimePoint, class Fn >
+	bool pump_until(TimePoint && timeout_time,Fn pred );
 
 
 	///Allows to modify content of the queue.
@@ -148,11 +148,11 @@ inline void MsgQueue<Msg, QueueImpl>::pump(Fn fn) {
 }
 
 template<typename Msg, typename QueueImpl>
-template<class Rep, class Period, class Fn>
+template<typename Duration, class Fn>
 inline bool MsgQueue<Msg, QueueImpl>::pump_for(
-		const std::chrono::duration<Rep, Period>& rel_time, Fn fn) {
+		Duration&& rel_time, Fn fn) {
 	Sync _(lock);
-	if (!condvar.wait_for(_, rel_time, [&]{return !queue.empty();})) return false;
+	if (!condvar.wait_for(_, std::forward<Duration>(rel_time), [&]{return !queue.empty();})) return false;
 	Msg ret = queue.front();
 	queue.pop();
 	_.unlock();
@@ -161,11 +161,11 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_for(
 }
 
 template<typename Msg, typename QueueImpl>
-template<class Clock, class Duration, class Fn>
+template<typename TimePoint,  class Fn>
 inline bool MsgQueue<Msg, QueueImpl>::pump_until(
-		const std::chrono::time_point<Clock, Duration>& timeout_time, Fn fn) {
+		TimePoint &&timeout_time, Fn fn) {
 	Sync _(lock);
-	if (!condvar.wait_until(_, timeout_time, [&]{return !queue.empty();})) return false;
+	if (!condvar.wait_until(_, std::forward<TimePoint>(timeout_time), [&]{return !queue.empty();})) return false;
 	Msg ret = queue.front();
 	queue.pop();
 	_.unlock();

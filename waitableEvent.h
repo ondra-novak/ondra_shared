@@ -20,7 +20,7 @@ namespace ondra_shared {
  */
 class WaitableEvent {
 public:
-	WaitableEvent(bool signaled):c(signaled?0:1) {}
+	WaitableEvent(bool signaled = false):c(signaled?0:1) {}
 
 	void signal() {
 		c.dec();

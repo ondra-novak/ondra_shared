@@ -15,6 +15,7 @@ using namespace std::literals::chrono_literals;
 #include "../worker.h"
 #include "../future.h"
 #include "../apply.h"
+#include "../scheduler.h"
 
 using namespace ondra_shared;
 
@@ -173,7 +174,7 @@ int main(int argc, char **argv) {
 */
 	///inicializace worker - vlakno v pozadi
 
-	auto w = Worker::create(0);
+	auto w = Worker::create();
 
 	/// 3x spust asynchronni ulohu (zde jednoduche example)
 	/// worker ma 1 vlakno, takze ... fronta!
@@ -217,6 +218,31 @@ int main(int argc, char **argv) {
 	std::cout << "first:" << first << std::endl;
 
 
+
+	auto sch = Scheduler::create();
+
+	auto repid = sch.each(0.3s) >> []{
+			std::cout << "called repeated action"<< std::endl;
+	};
+
+	sch.after(1s) >> []{
+			std::cout << "called after 1 second"<< std::endl;
+	};
+
+	sch.after(2s) >> []{
+			std::cout << "called after 2 second"<< std::endl;
+	} >> [=]{
+		std::cout << "removed repeated action"<< std::endl;
+		sch.remove(repid);
+	};
+
+	WaitableEvent ev;
+	sch.after(3s) >> []{
+			std::cout << "called after 3 second"<< std::endl;
+	} >> ([&ev]{
+		ev.signal();
+	});
+	ev.wait();
 
 
 }

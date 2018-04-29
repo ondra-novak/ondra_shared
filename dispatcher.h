@@ -57,6 +57,59 @@ public:
 		}
 	}
 
+	class PumpTimeoutHelper {
+	public:
+		bool timeRet = true;;
+		bool notExitMsg = true;
+		void operator()(const Msg &msg) {
+			timeRet = false;
+			if (msg == nullptr) notExitMsg = false;
+			else msg();
+		}
+		bool getRetValue(bool *timeout) const {
+			if (timeout) *timeout = timeRet;
+			return notExitMsg;
+		}
+	};
+
+	///Waits for message and pumps it but limits waiting for specified duration
+	/**
+	 * @param dur specifies maximum duration for waiting
+	 * @param timeout pointer to variable, which receives status about timeout if happened. This
+	 * information is not often important, because timeout is used to perform some other tasks
+	 * if the waiting is too long. If this pointer is null, no information is stored. If this
+	 * pointer is not null, it is set to true, if the function returned because waiting reached
+	 * specified duration.
+	 *
+	 * @retval true message processed or timeout
+	 * @retval false quit message processed, caller should no longer process messages
+	 */
+	template<typename Duration>
+	bool pump_or_wait_for(Duration &&dur, bool *timeout = nullptr) noexcept {
+		PumpTimeoutHelper hlp;
+		queue.pump_for<Duration, PumpTimeoutHelper &>(std::forward<Duration>(dur), hlp);
+		return hlp.getRetValue(timeout);
+	}
+
+	///Waits for message and pumps it but will not wait beyon specified time
+	/**
+	 * @param tp timepoint after waiting is aborted
+	 * @param timeout pointer to variable, which receives status about timeout if happened. This
+	 * information is not often important, because timeout is used to perform some other tasks
+	 * if the waiting is too long. If this pointer is null, no information is stored. If this
+	 * pointer is not null, it is set to true, if the function returned because waiting reached
+	 * specified time.
+	 *
+	 * @retval true message processed or timeout
+	 * @retval false quit message processed, caller should no longer process messages
+	 */
+	template<typename TimePoint>
+	bool pump_or_wait_until(TimePoint &&tp, bool *timeout = nullptr) noexcept {
+		PumpTimeoutHelper hlp;
+		queue.pump_until<TimePoint, PumpTimeoutHelper &>(std::forward<TimePoint>(tp), hlp);
+		return hlp.getRetValue(timeout);
+	}
+
 
 	///quits the dispatcher
 	/**
