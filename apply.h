@@ -8,6 +8,9 @@
 #ifndef ONDRA_SHARED_SRC_SHARED_APPLY_H_464604698
 #define ONDRA_SHARED_SRC_SHARED_APPLY_H_464604698
 
+#include <utility>
+#include <functional>
+
 namespace ondra_shared {
 
 
@@ -23,6 +26,9 @@ auto apply(Fnc &&fnc, const std::tuple<Types...> &tuple)
 	return apply_impl(std::forward<Fnc>(fnc), tuple, std::index_sequence_for<Types...>());
 }
 
+#define wrap_template_fn(fn) \
+    [&] (auto&&... args) -> decltype(auto) \
+    { return fn (std::forward<decltype(args)>(args)...); }
 }
 
 

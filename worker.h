@@ -7,11 +7,13 @@
 
 #ifndef ONDRA_SHARED_WORKER_H_456106749845
 #define ONDRA_SHARED_WORKER_H_456106749845
+#include <thread>
 
 #include "dispatcher.h"
 #include "mtcounter.h"
 #include "refcnt.h"
 #include "apply.h"
+
 
 namespace ondra_shared {
 
@@ -212,11 +214,7 @@ public:
 	auto operator>>(Fn &&fn) {
 		typename FutureFromType<decltype(std::declval<Fn>()())>::type fut;
 		dispatch([fut,f = std::remove_reference_t<Fn>(fn)] ()mutable {
-			try {
-				fut.set(f());
-			} catch (...) {
-				fut.reject();
-			}
+			FutureFromType<decltype(std::declval<Fn>()())>::callFnSetValue(fut,f);
 		});
 		return fut;
 	}

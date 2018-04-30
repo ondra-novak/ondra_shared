@@ -7,6 +7,7 @@
 
 #ifndef ONDRA_SHARED_WORKER_SCHEDULER_H_
 #define ONDRA_SHARED_WORKER_SCHEDULER_H_
+#include <thread>
 #include <queue>
 #include <functional>
 
@@ -16,6 +17,8 @@
 
 
 namespace ondra_shared {
+
+template<typename T> class FutureFromType;
 
 
 template<typename TimePoint>
@@ -101,8 +104,8 @@ public:
 
 		struct ScheduledItem {
 			TimePoint tp;
-			Msg msg;
 			Duration interval;
+			Msg msg;
 			std::size_t id;
 
 			ScheduledItem(const TimePoint &tp,const Duration &interval
