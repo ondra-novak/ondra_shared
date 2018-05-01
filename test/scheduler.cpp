@@ -9,6 +9,7 @@
 
 #include <fstream>
 #include "../scheduler.h"
+#include "../sch2wrk.h"
 #include "../future.h"
 #include <chrono>
 
@@ -21,13 +22,17 @@ int main(int argc, char **argv) {
 
 
 	auto sch = Scheduler::create();
+	auto wrk = schedulerGetWorker(sch);
 
 	auto repid = sch.each(0.3s) >> []{
 			std::cout << "called repeated action"<< std::endl;
 	};
 
-	sch.after(1s) >> []{
+	sch.after(1s) >> [wrk]{
 			std::cout << "called after 1 second"<< std::endl;
+			wrk >> [] {
+					std::cout << "called using worker"<< std::endl;
+			};
 	};
 
 	sch.after(2s) >> []{
