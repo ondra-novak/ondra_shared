@@ -30,6 +30,10 @@ public:
 	///run the worker for current thread
 	virtual void run() noexcept	= 0;
 
+	///run the worker for current thread but doesn't wait for new messages
+	virtual void flush() noexcept	= 0;
+
+
 	///destructor
 	virtual ~AbstractWorker() {}
 };
@@ -142,6 +146,10 @@ public:
 		}
 
 		virtual void run() noexcept override {
+			worker(d);
+		}
+
+		virtual void flush() noexcept override {
 			RefCntPtr<SharedDispatcher> sd(d);
 			while (!sd->empty()) {
 				if (!sd->pump()) {
@@ -177,6 +185,27 @@ public:
 	}
 
 
+	///Installs worker to the current thread
+	/**
+	 * By installing worker to current thread, the current thread is converted to worker.
+	 * This allows to have at least one worker without need to have threading library.
+	 *
+	 * @param fn Function called to initialize the worker. It receives Worker variable
+	 *
+	 * @note To uninstall worker, you need to decrement count of references of the
+	 * Worker's instance to zero. Once this is achieved, the program only needs to return
+	 * from the current function back to the worker.
+	 */
+	template<typename InitFn>
+	static void install(InitFn && fn) {
+		DefaultWorker *w = new DefaultWorker;
+		w->dispatch([=]{
+			fn(Worker(w));
+		});
+		w->run();
+	}
+
+
 	///Returns true, if the variable contains a worker instance
 	bool defined() const {
 		return wrk != nullptr;
@@ -188,9 +217,9 @@ public:
 		wrk->dispatch(msg);
 	}
 
-	///Detach variable of the worker
+	///Clears variable
 	/** If the worker as a single instance, it causes that worker is destroyed*/
-	void detach() {wrk = nullptr;}
+	void clear() {wrk = nullptr;}
 
 	///Flushes worker's queue
 	/** Function should be called on workers without own thread. It process all messages
@@ -203,7 +232,10 @@ public:
 	 * the enqueued functions are not called resulting to many resource leaks
 	 *
 	 */
-	void flush() {wrk->run();}
+	void flush() {wrk->flush();}
+
+	///Converts current thread to worker's thread complete
+	void run() {wrk->run();}
 
 	///Call the function asynchronously in the context of the worker and return Future
 	/**

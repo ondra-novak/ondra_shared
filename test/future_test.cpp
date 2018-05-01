@@ -119,7 +119,7 @@ void callInLambda(Fn &&fn, Args && ... args) {
 
 
 int main(int argc, char **argv) {
-/*
+
 
 	callInLambda([](int a, int b, const char *c, double d){
 		std::cout << a << b << c << d << std::endl;
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
 	f8.set(142);
 	std::cout << "Future2:" << f9.get() << std::endl;
 
-*/
+
 	///inicializace worker - vlakno v pozadi
 
 	auto w = Worker::create();

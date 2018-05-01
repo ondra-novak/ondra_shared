@@ -56,6 +56,14 @@ public:
 	 */
 	virtual void remove(std::size_t id, std::function<void(bool)> callback = nullptr) = 0;
 
+	///Executes message immediate
+	/**
+	 * @param msg message (function) called immediate
+	 *
+	 * @note Immediate message is called as soon as code returns the control to the scheduler.
+	 * Also note that immediate message cannot be removed
+	 */
+	virtual void immediate(const Msg &msg) = 0;
 
 	///destructor
 	virtual ~AbstractScheduler() {}
@@ -122,27 +130,45 @@ public:
 
 	public:
 
+		enum _Standalone {standaloneMode};
+		enum _Install {installMode};
 
 
-		BasicScheduler() {
-			WaitableEvent ev(false);
-			std::thread([&]{
-				Dispatcher dispatcher;
-				SchQueue queue;
-				this->queue = &queue;
-				this->dispatcher = &dispatcher;
-				ev.signal();
-
-				TimePoint tp = Clock::now();
-				TimePoint nx = execAllRetired(queue,tp);
-				while (dispatcher.pump_or_wait_until(nx)) {
-					TimePoint tp = Clock::now();
-					nx = execAllRetired(queue, tp);
-				}
-			}).detach();
-			ev.wait();
+		BasicScheduler(_Standalone) {
+				WaitableEvent ev(false);
+				std::thread([&]{
+					worker([&]{ev.signal();});
+				}).detach();
+				ev.wait();
 		}
 
+		BasicScheduler(_Install) {
+				this->queue = nullptr;
+				this->dispatcher = nullptr;
+		}
+
+		template<typename InitFn>
+		void worker(InitFn && initFn) {
+			Dispatcher dispatcher;
+			SchQueue queue;
+			this->queue = &queue;
+			this->dispatcher = &dispatcher;
+			initFn();
+
+			TimePoint tp = Clock::now();
+			TimePoint nx = execAllRetired(queue,tp);
+			while (dispatcher.pump_or_wait_until(nx)) {
+				TimePoint tp = Clock::now();
+				nx = execAllRetired(queue, tp);
+			}
+		}
+
+		template<typename Fn>
+		void install(Fn &&fn) {
+			worker([&]{
+				fn(SchedulerT(this));
+			});
+		}
 
 		virtual std::size_t at(const TimePoint &tp, const Msg &msg) override {
 			std::size_t id = ++idcounter;
@@ -162,6 +188,11 @@ public:
 			});
 			return id;
 		}
+
+		virtual void immediate(const Msg &msg) override {
+			dispatcher->dispatch(msg);
+		}
+
 
 		virtual void remove(std::size_t id, std::function<void(bool)> cb) override {
 			SchQueue *q = queue;
@@ -271,7 +302,18 @@ public:
 		SchedulerT sch;
 		Duration dur;
 
+	};
 
+	class Immediate {
+	public:
+		Immediate(SchedulerT sch):sch(sch) {}
+
+		template<typename Fn>
+		void operator>>(Fn &&fn) {
+			return sch.impl->immediate(std::remove_reference_t<Fn>(fn));
+		}
+
+		SchedulerT sch;
 	};
 
 	///Schedules a function at specified time
@@ -321,7 +363,7 @@ public:
 	 * 	 * To use this function, use the operator >> to assign the function
 	 * @code
 	 * auto sch = Scheduler.create();
-	 * auto future_result = sch.each(1s) >> [] {
+	 * auto id = sch.each(1s) >> [] {
 	 * 	 	std::cout << "Called each second" << std::endl;
 	 * };
 	 * @endcode
@@ -335,9 +377,55 @@ public:
 		return Each(*this, std::chrono::duration_cast<Duration>(dur));
 	}
 
+
+	///Schedules function to run immediate after the current code returns to the scheduler
+	/**
+	 * 	 * To use this function, use the operator >> to assign the function
+	 * @code
+	 * auto sch = Scheduler.create();
+	 * sch.immediate() >> [] {
+	 * 	 	std::cout << "Ran immediate" << std::endl;
+	 * };
+	 * @endcode
+	 *
+	 * @note Function scheduled immediately cannot be canceled, so function doesn't return.
+	 */
+	Immediate immediate() const {
+		return Immediate (*this);
+	}
+
+	///clears scheduler's variable which decrements count of references
+	void clear() {
+		impl = nullptr;
+	}
+
 	///Creates scheduler
+	/**
+	 * @return Returns scheduler
+	 *
+	 * @note to destroy scheduler, decrement count of references to zero (you can use
+	 * clear() on initialized variable). Once this is achieved, scheduler is destroyed.
+	 */
 	static SchedulerT create() {
-		return SchedulerT(new BasicScheduler);
+		return SchedulerT(new BasicScheduler(BasicScheduler::standaloneMode));
+	}
+
+	///Installs the scheduler to the current thread
+	/**
+	 * Function converts current thread to scheduler's thread. This allows to have scheduler
+	 * without need to create any thread.
+	 *
+	 * @param init Function is called to initialize scheduler's thread. The function receives
+	 * Scheduler variable containing reference to the instance. You have chance
+	 * to schedule the first function. The scheduler starts once the function is left.
+	 *
+	 * To uninstall the scheduler, simply decrement count of references to zero. You can use
+	 * Scheduler::clear() to achieve this. Once this is achieved, the scheduler uninstalls
+	 * itself as soon as the control is returned to the scheduler's level
+	 */
+	template<typename InitFn>
+	static void install(InitFn && init) {
+		(new BasicScheduler(BasicScheduler::installMode))->install(init);
 	}
 
 protected:
