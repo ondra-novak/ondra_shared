@@ -213,7 +213,7 @@ public:
 
 	///dispatch a single function
 	/** calls the function in context of the worker */
-	void dispatch(const Msg &msg) {
+	void dispatch(const Msg &msg) const{
 		wrk->dispatch(msg);
 	}
 
@@ -232,10 +232,10 @@ public:
 	 * the enqueued functions are not called resulting to many resource leaks
 	 *
 	 */
-	void flush() {wrk->flush();}
+	void flush() const {wrk->flush();}
 
 	///Converts current thread to worker's thread complete
-	void run() {wrk->run();}
+	void run() const {wrk->run();}
 
 	///Call the function asynchronously in the context of the worker and return Future
 	/**
@@ -243,7 +243,7 @@ public:
 	 * @return Future containing return value of the function
 	 */
 	template<typename Fn>
-	auto operator>>(Fn &&fn) {
+	auto operator>>(Fn &&fn) const {
 		typename FutureFromType<decltype(std::declval<Fn>()())>::type fut;
 		dispatch([fut,f = std::remove_reference_t<Fn>(fn)] ()mutable {
 			FutureFromType<decltype(std::declval<Fn>()())>::callFnSetValue(fut,f);
