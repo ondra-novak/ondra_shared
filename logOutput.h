@@ -613,6 +613,19 @@ class LogObjectT {
 	typedef LogObjectT<PLogProvider> LogObject;
 	typedef LogObjectT<std::shared_ptr<AbstractLogProvider> > SharedLogObject;
 
+
+
+	inline std::string what(const std::exception_ptr &e) {
+		try {
+			std::rethrow_exception(e);
+		} catch (const std::exception &e) {
+			return e.what();
+		} catch (...) {
+			return "unknown exception";
+		}
+	}
+
+
 }
 
 

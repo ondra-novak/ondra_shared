@@ -251,7 +251,6 @@ public:
 		return fut;
 	}
 
-
 protected:
 
 	RefCntPtr<AbstractWorker> wrk;
@@ -322,6 +321,7 @@ template<typename T>
 auto operator >> (const FutureExceptionalState<Future<T> > &fut, const Worker &wrk) {
 	return _details::WorkerFutureExceptionChain<Future<T> >(fut.getFuture(), wrk);
 }
+
 
 
 }
