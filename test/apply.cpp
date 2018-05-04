@@ -23,19 +23,18 @@ void argList(int count,T && t,  Args && ... args) {
 }
 
 
-template<typename ... Args>
-void foo(Args && ... args) {
-	argList(0, std::forward<Args>(args)...);
-}
+struct Foo {
+	template<typename ... Args>
+	void operator()(Args && ... args) {
+		argList(0, std::forward<Args>(args)...);
+	}
+};
 
-#define WRAP(f) \
-    [&] (auto&&... args) -> decltype(auto) \
-    { return f (std::forward<decltype(args)>(args)...); }
 
 int main(int argc, char **argv) {
 
 	auto tuple = std::make_tuple("Hello", "world", 42, 12.3, true);
-	apply(wrap_template_fn(foo), tuple);
+	apply(Foo(), tuple);
 
 }
 
