@@ -24,12 +24,17 @@ int main(int argc, char **argv) {
 
 
 
-	static const double left = -1.153;
+/*	static const double left = -1.153;
 	static const double right = -1.154;
 	static const double top = 0.201;
 	static const double bottom = 0.202;
-	static const unsigned int sizeX = 10000;
-	static const unsigned int sizeY = 10000;
+	*/
+	static const double left = -2;
+	static const double right = 2;
+	static const double top = -2;
+	static const double bottom = 2;
+	static const unsigned int sizeX = 2000;
+	static const unsigned int sizeY = 2000;
 
 	buffer.resize(sizeY);
 	for (unsigned int i = 0; i < sizeY; i++) {
