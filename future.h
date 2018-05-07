@@ -520,6 +520,7 @@ template<>
 class Future<void>: public Future<FutureEmptyValue> {
 public:
 	Future() {}
+	Future(const Future<FutureEmptyValue> &e):Future<FutureEmptyValue>(e) {}
 	using Future<FutureEmptyValue>::Future;
 };
 
