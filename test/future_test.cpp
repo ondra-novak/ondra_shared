@@ -64,66 +64,10 @@ auto testChain(Future<int> &f) {
 	});
 }
 
-auto testChain2(Future<int> &f, Worker w) {
-	return (
-
-	!( //try
-		f >> w >> [](int x) {
-			//print test
-			std::cout << "(worker) Value:" << x << std::endl;
-			return x;
-		} >> w >> [](int x) {
-			//convert
-			std::ostringstream sbuff;
-			sbuff << x;
-			return sbuff.str();
-		} >> w >> [](std::string a) {
-			//print test
-			std::cout << "(worker) Value as string: " << a << std::endl;
-			return a;
-		} >> w >> [](std::string a) {
-			Future<std::string> z;
-			std::thread thr([z,a]() mutable {
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-				z.set("Delayed "+a);
-			});
-			thr.detach();
-			return z;  //return std::string
-		} >> w >> [](std::string a) {
-			//print test
-			std::cout << "(worker) Value as string (2): " << a << std::endl;
-			return a;
-		}
-
-	) >>  w >> [](const std::exception_ptr &e) { //catch (return std::string)
-		try {
-			std::rethrow_exception(e);
-		} catch (std::exception &e) {
-			return std::string("Exception: ")+e.what();
-		}
-	}
-
-	);
-}
-
-
-template<typename Fn, typename... Args>
-void callInLambda(Fn &&fn, Args && ... args) {
-	auto z = std::make_tuple(std::forward<Args>(args)...);
-	std::remove_reference_t<Fn> xfn(fn);
-	auto zfn = [z,xfn]{
-		apply(xfn,z);
-	};
-	zfn();
-}
 
 
 int main(int argc, char **argv) {
 
-
-	callInLambda([](int a, int b, const char *c, double d){
-		std::cout << a << b << c << d << std::endl;
-	},10,20,"ahoj",32.23);
 
 	testVal1.await([](int v) {
 		std::cout << "Handle1: " << v << std::endl;
@@ -166,10 +110,10 @@ int main(int argc, char **argv) {
 	f3.reject(std::make_exception_ptr(std::runtime_error("Rejected by exception")));
 	std::cout << "Future2:" << f4.get() << std::endl;
 
-	Future<int> f8;
+/*	Future<int> f8;
 	auto f9 = testChain2(f8,Worker::create());
 	f8.set(142);
-	std::cout << "Future2:" << f9.get() << std::endl;
+	std::cout << "Future2:" << f9.get() << std::endl;*/
 
 
 	///inicializace worker - vlakno v pozadi
@@ -179,25 +123,28 @@ int main(int argc, char **argv) {
 	/// 3x spust asynchronni ulohu (zde jednoduche example)
 	/// worker ma 1 vlakno, takze ... fronta!
 
-	auto df1 = w >> []{
+	auto df1 = future_call >> [=]{
 			std::cout << "--- bezi df1 ---" << std::endl;
 			std::this_thread::sleep_for(600ms);
 			return std::string("ahoj");
-	};
+	} >> w;
 
-	auto df2 = w >> []{
+
+	auto df2 = future_call >> [=]{
 			std::cout << "--- bezi df2 ---" << std::endl;
 			std::this_thread::sleep_for(200ms);
 			return std::string("cago");
-	};
+	} >> w;
 
-	auto df3 = w >> []{
+	auto df3 = future_call >> [=]{
 			std::cout << "--- bezi df3 ---" << std::endl;
 			std::this_thread::sleep_for(100ms);
 			return std::string("belo");
-	} >> [](const std::string &res) {
+	} >> w >> [](const std::string &res) {
 		return res + " silenci";
 	};
+
+
 
 	typedef decltype(df1) Fut;
 
@@ -218,31 +165,6 @@ int main(int argc, char **argv) {
 	std::cout << "first:" << first << std::endl;
 
 
-
-	auto sch = Scheduler::create();
-
-	auto repid = sch.each(0.3s) >> []{
-			std::cout << "called repeated action"<< std::endl;
-	};
-
-	sch.after(1s) >> []{
-			std::cout << "called after 1 second"<< std::endl;
-	};
-
-	sch.after(2s) >> []{
-			std::cout << "called after 2 second"<< std::endl;
-	} >> [=]{
-		std::cout << "removed repeated action"<< std::endl;
-		sch.remove(repid);
-	};
-
-	WaitableEvent ev;
-	sch.after(3s) >> []{
-			std::cout << "called after 3 second"<< std::endl;
-	} >> ([&ev]{
-		ev.signal();
-	});
-	ev.wait();
 
 
 }

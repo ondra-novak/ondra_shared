@@ -280,7 +280,7 @@ public:
 			typedef FutureFromType<decltype(std::declval<Fn>()())> FutFromType;
 			FutureWithID<typename FutFromType::type> fut;
 			fut.set_id(sch.impl->at(tp,[fut,fn=std::remove_reference_t<Fn>(fn)]() mutable {
-				FutFromType::callFnSetValue(fut,fn);
+				fut.set_result_of(fn);
 			}));
 			return fut;
 		}
@@ -427,6 +427,9 @@ public:
 	static void install(InitFn && init) {
 		(new BasicScheduler(BasicScheduler::installMode))->install(init);
 	}
+
+	///Returns true, if object is valid (i.e. has assigned scheduler object)
+	bool valid() const {return impl != nullptr;}
 
 protected:
 	RefCntPtr<AbstractScheduler<TimePoint> > impl;
