@@ -19,20 +19,30 @@ template<typename T> class FutureExceptionalState;
 
 
 
-class IDeferFunction {
-public:
-	virtual void run() noexcept= 0;
-	virtual ~IDeferFunction() noexcept {}
-
-	IDeferFunction *next;
-};
-
+///Abstract defer context
 class IDeferContext {
 public:
 
+	///Abstract interface for defered function. Do not use directly
+	class IDeferFunction {
+	public:
+		virtual void run() noexcept= 0;
+		virtual ~IDeferFunction() noexcept {}
 
+		IDeferFunction *next;
+	};
+
+	///contains current defer_root
 	static thread_local IDeferContext *include_defer_tcc_to_your_main_source;
 
+	///defer function call
+	/**
+	 * Defered function is called implicitly on defer_root or explicitly on yield()
+	 *
+	 * @param fn function to call defered
+	 *
+	 * @note function is not thread safe
+	 */
 	template<typename Fn>
 	void defer_call(Fn && fn) {
 		class FnObj: public IDeferFunction {
@@ -50,20 +60,27 @@ public:
 		IDeferFunction *dfn = new FnObj(std::forward<Fn>(fn));
 		defer_call_impl(dfn);
 	}
+
+	///defer function call
+	/**
+	 * Defered function is called implicitly on defer_root or explicitly on yield()
+	 *
+	 * @param fn function to call defered
+	 *
+	 * @note function is not thread safe
+	 */
 	template<typename Fn>
 	void operator>>(Fn &&fn) {
 		defer_call<Fn>(std::forward<Fn>(fn));
 	}
 
-	template<typename Fn,
-			typename RetVal = typename FutureFromType<decltype(std::declval<Fn>()())>::type >
-	RetVal operator>>=(Fn &fn) {
-		RetVal tmp;
-		(*this) >> [fn = std::remove_reference_t<Fn>(fn), tmp]() mutable {
 
-		};
+	///Execute all defered functions now
+	/** You need to call this function if there is posibility that thread will
+	 * be blocked or locked waiting for finish operation which has been defered
+	 */
+	virtual void yield() noexcept= 0;
 
-	}
 protected:
 	virtual void defer_call_impl(IDeferFunction *fn) = 0;
 
@@ -72,30 +89,64 @@ protected:
 
 
 enum DeferRootKW {
-	defer_root
+	///create new root
+	defer_root,
+	///create new root if there is none, otherwise keep current root
+	defer_root_if_none
 };
 
+///Creates defer stack context
+/**
+ * This creates context, where the defered functions are executed in reverse order of
+ * registration.
+ *
+ * This can be handful for cleanup stack non-RAII items.
+ *
+ * @code
+ * DeferStack defer;
+ *
+ *  //open file
+ * FILE *f = fopen("test"."w");
+ *  //defer closing of the file
+ * defer >> [f]{fclose(f);};
+ *
+ *  //.. use file without need to close it explicitly
+ *
+ * @endcode
+ */
 class DeferStack: public IDeferContext {
 public:
 
+	///Creates local defer stack
+	/** Created defer stack can be controlled only through it instance, it has
+	 * none impact to global defer feature
+	 */
 	DeferStack()
 		:prevContext(this),top(nullptr) {
 
 	}
 
-	explicit DeferStack(DeferRootKW)
+	///Creates global defer stack
+	/**
+	 * Created defer stack affects defer feature for the current thread
+	 * @param kw specifies how is defer_root handled
+	 */
+	explicit DeferStack(DeferRootKW kw)
 		:prevContext(include_defer_tcc_to_your_main_source)
 		,top(nullptr) {
-		include_defer_tcc_to_your_main_source = this;
+		if (include_defer_tcc_to_your_main_source == nullptr || kw ==  defer_root)
+			include_defer_tcc_to_your_main_source = this;
 	}
 
+	///Destructor
+	/** Destructor also performs implicit yield() */
 	~DeferStack() noexcept {
-		flush();
+		yield();
 		if (prevContext != this)
 			include_defer_tcc_to_your_main_source = prevContext;
 	}
 
-	void flush() {
+	virtual void yield() noexcept override {
 		while (top) {
 			IDeferFunction *x = top;
 			top= x->next;
@@ -118,15 +169,30 @@ protected:
 
 
 
-
+///Creates standard defer context
+/**
+ * Standard defer context is implemented as FIFO. The first defered function
+ * is also first called.
+ *
+ */
 class DeferContext: public DeferStack {
 public:
 
+	///Creates local defer context
+	/**
+	 * Local defer context can be controlled only through its variable. It has no
+	 * impact to global context
+	 */
 	DeferContext():last(nullptr) {}
-	DeferContext(DeferRootKW):DeferStack(defer_root), last(nullptr) {}
+
+	///Creates global defer context
+	/**
+	 * @param kw specifies how the global context is defined
+	 */
+	DeferContext(DeferRootKW kw):DeferStack(kw), last(nullptr) {}
 
 	~DeferContext() noexcept {
-		flush();
+		yield();
 	}
 
 	virtual void defer_call_impl(IDeferFunction *fn) {
@@ -144,22 +210,48 @@ protected:
 
 };
 
+///The keyword is used to defer a function on global defer context
 enum DeferKeyword {
 	defer
 };
 
+///Defers the function in global defer context
+/**
+ *
+ * @param DeferKeyword always "defer"
+ * @param fn function which is called "later".
+ *
+ * @note if there is no active defer context, the function creates one. However in
+ * such situation, the function cannot be defered, so it is called immediatelly. However
+ * if the function uses defer anywhere in its body, all these functions are defered and
+ * executed after the first function returns
+ *
+ * The very first use of "defer" is often performed to define implicit defer_root and
+ * the all subsequent functions are correctly defered
+ */
 template<typename Fn>
 void operator>>(DeferKeyword, Fn &&fn) {
 	IDeferContext *curContext = IDeferContext::include_defer_tcc_to_your_main_source;
 	if (curContext == nullptr) {
 		DeferContext newContext(defer_root);
-		newContext.defer_call(std::forward<Fn>(fn));
+		fn();
 	} else {
 		curContext->defer_call(std::forward<Fn>(fn));
 	}
 }
 
-
+///Yields current thread and explicitly executes all defered functions
+/**
+ * This is required to empty defer context when for example the function is going
+ * to block or lock the thread while it waiting to an event which can be
+ * the result of some defered function. Without it a deadlock can be result of such
+ * situation.
+ *
+ */
+inline void defer_yield() {
+	IDeferContext *curContext = IDeferContext::include_defer_tcc_to_your_main_source;
+	if (curContext) curContext->yield();
+}
 
 
 

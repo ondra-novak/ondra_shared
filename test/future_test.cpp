@@ -16,6 +16,7 @@ using namespace std::literals::chrono_literals;
 #include "../future.h"
 #include "../apply.h"
 #include "../scheduler.h"
+#include "../defer.tcc"
 
 using namespace ondra_shared;
 
@@ -68,6 +69,7 @@ auto testChain(Future<int> &f) {
 
 int main(int argc, char **argv) {
 
+	DeferContext deferRoot(defer_root);
 
 	testVal1.await([](int v) {
 		std::cout << "Handle1: " << v << std::endl;

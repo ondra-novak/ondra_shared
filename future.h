@@ -8,13 +8,14 @@
 #include "refcnt.h"
 #include "waitableEvent.h"
 #include "stringview.h"
-#include "apply.h"
+#include "defer.h"
 
 
 namespace ondra_shared {
 
 
 template<typename FT> class FutureExceptionalState;
+class FutureWaitableEvent;
 ///Generic variable contains a immutable value which is initialized in the future
 /**
  * The instance of the FutureValue is immovable and immutable shared state between multiple threads.
@@ -127,7 +128,7 @@ public:
 	 *
 	 * @return new waitable event
 	 */
-	std::shared_ptr<WaitableEvent> create_waitable_event();
+	std::shared_ptr<FutureWaitableEvent> create_waitable_event();
 
 	///Asynchronous waiting
 	/**
@@ -223,17 +224,19 @@ protected:
 	template<typename Fn1, typename Fn2> class WaitHandlerAwaitCatch;
 	template<typename Fn> class WaitHandlerCatch;
 
-	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(t)) {
-		return fn(t);
+	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(t),void()) {
+		defer >> [t=T(t),fn=Fn(fn)]() mutable {fn(t);};
 	}
-	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn()) {
-		return fn();
+	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(),void()) {
+		defer >> fn;
 	}
-	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t)) {
-		return fn(t);
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t),void()) {
+		defer >> [t=std::exception_ptr(t),fn=Fn(fn)]() mutable {fn(t);};
+		fn(t);
 	}
-	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn()) {
-		return fn();
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(),void()) {
+		defer >> fn;
+		fn();
 	}
 
 	bool lockResolve() {
@@ -334,7 +337,7 @@ public:
 	 */
 	void wait() const;
 
-	std::shared_ptr<WaitableEvent> create_waitable_event();
+	std::shared_ptr<FutureWaitableEvent> create_waitable_event();
 
 	///Asynchronous waiting
 	/**
@@ -524,12 +527,14 @@ bool FutureValue<T>::resolve(const Fn &fn, const ValueType &value, AbstractWatch
 
 	AbstractWatchHandler *chain = watchChain.exchange(nullptr);
 
+
 	//walk the chain
 	while (chain != nullptr) {
 		AbstractWatchHandler *z = chain;
 		chain = z->next;
 		//skip handler if equal
 		if (z != skip) {
+
 			(z->*fn)(value);
 			z->release();
 		} else {
@@ -670,6 +675,8 @@ inline void FutureValue<T>::wait() const {
 	WaitHandler wh;
 	//add handler, if true returned - already resolved
 	if (const_cast<FutureValue<T> *>(this)->addHandler(&wh)) return;
+	//yeild any defered function (to prevent deadlock)
+	defer_yield();
 	//acquire the lock
 	std::unique_lock<std::mutex> mx(wh.lock);
 	//wait for being fired.
@@ -723,9 +730,20 @@ inline bool FutureValue<T>::addHandler(AbstractWatchHandler *h) {
 	return b;
 }
 
+class FutureWaitableEvent: public WaitableEvent {
+public:
+	using WaitableEvent::WaitableEvent;
+
+	bool wait(unsigned int timeout_ms) {defer_yield();return c.wait(timeout_ms);}
+	void wait() {defer_yield();c.wait();}
+	template<typename TimePoint> bool wait_until(const TimePoint &tp) {defer_yield();return c.wait_until(tp);}
+	template<typename Duration> bool wait_for(const Duration &dur) {defer_yield();return c.wait_for(dur);}
+
+};
+
 template<typename T>
-inline std::shared_ptr<WaitableEvent> FutureValue<T>::create_waitable_event()  {
-	std::shared_ptr<WaitableEvent> ev (std::make_shared<WaitableEvent>(false));
+inline std::shared_ptr<FutureWaitableEvent> FutureValue<T>::create_waitable_event()  {
+	std::shared_ptr<FutureWaitableEvent> ev (std::make_shared<FutureWaitableEvent>(false));
 
 	auto fn = [ev] {
 		ev->signal();
@@ -919,7 +937,7 @@ template<typename T> void Future<T>::wait() const {
 	v->wait();
 }
 
-template<typename T> inline std::shared_ptr<WaitableEvent> Future<T>::create_waitable_event() {
+template<typename T> inline std::shared_ptr<FutureWaitableEvent> Future<T>::create_waitable_event() {
 	return v->create_waitable_event();
 }
 
@@ -998,7 +1016,13 @@ template<typename T> template<typename Fn> void FutureValue<T>::finally(Fn &&fn)
 		std::remove_reference_t<Fn> fn;
 	};
 
-	addHandler(new Spec(fn));
+	if (is_resolved()) {
+		defer >> fn;
+	}
+	else {
+		if (addHandler(new Spec(fn)))
+			defer >> fn;
+	}
 
 }
 
