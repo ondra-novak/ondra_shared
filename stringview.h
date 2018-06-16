@@ -98,6 +98,7 @@ namespace ondra_shared {
 			return npos;
 		}
 
+
 		std::size_t lastIndexOf(const StringView<MutableType> sub, std::size_t pos = 0) const {
 			if (sub.length > length) return -1;
 			std::size_t eflen = length - sub.length + 1;
@@ -187,7 +188,7 @@ namespace ondra_shared {
 		}
 
 		template<typename Fn>
-		StringViewBase trim(const Fn &fn) {
+		StringViewBase trim(Fn &&fn) {
 			StringViewBase src(*this);
 			while (!src.empty() && fn(src[0])) src = src.substr(1);
 			while (!src.empty() && fn(src[src.length-1])) src = src.substr(0,src.length-1);
