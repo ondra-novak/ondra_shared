@@ -130,9 +130,9 @@ public:
 
 
 #ifdef _WIN32
-	char pathSeparator='\\';
+	static const char pathSeparator='\\';
 #else
-	char pathSeparator='/';
+	static const char pathSeparator='/';
 #endif
 
 protected:
@@ -148,6 +148,9 @@ protected:
 
 inline std::string IniConfig::Value::getPath() const {
 	std::string s;
+	if (v.empty() || v.getData()[0] == IniConfig::pathSeparator) {
+		return std::string(v.getData(),v.getLength());
+	}
 	s.reserve(v.getLength() + p.getLength());
 	s.append(p.getData(),p.getLength());
 	s.append(v.getData(),v.getLength());
@@ -198,7 +201,7 @@ inline bool IniConfig::load(const std::string& pathname,const D& directives) {
 
 	std::ifstream input(pathname);
 	if (!input) return false;
-	auto sep = pathname.find(pathSeparator);
+	auto sep = pathname.find_last_of(pathSeparator);
 	if (sep != pathname.npos) {
 		StrViewA newpath = StrViewA(pathname).substr(0,sep+1);
 		curPath = pool.add(newpath);
