@@ -44,7 +44,7 @@ public:
 
 	void setCurrent() {
 		AbstractLogProviderFactory::getInstance() = this;
-		AbstractLogProvider::getInstance() = create();
+		AbstractLogProvider::getInstance() = StdLogProviderFactory::create();
 	}
 
 	void reopenLog() {
@@ -56,6 +56,17 @@ public:
 		outfile << line << std::endl;
 	}
 
+
+	static PStdLogProviderFactory create(const std::string &logfile, std::string &loglevel,  LogLevel deflevel = LogLevel::warning) {
+		LogLevelToStrTable table;
+		auto lev = table.fromString(loglevel, deflevel);
+		return create(logfile, lev);
+	}
+
+	static PStdLogProviderFactory create(const std::string &logfile, LogLevel lev) {
+		if (logfile.empty()) return new StdLogProviderFactory(lev);
+		else return new StdLogFile(logfile, lev);
+	}
 
 protected:
 
