@@ -57,6 +57,7 @@ public:
 	}
 
 
+<<<<<<< HEAD
 	///Create standard log to file
 	/**
 	 * @param pathname pathname to file, if empty, stderr is used
@@ -79,6 +80,17 @@ public:
 		LogLevelToStrTable lstr;
 		auto l = lstr.fromString(level,defaultLevel);
 		return create(pathname, l);
+=======
+	static PStdLogProviderFactory create(const std::string &logfile, std::string &loglevel,  LogLevel deflevel = LogLevel::warning) {
+		LogLevelToStrTable table;
+		auto lev = table.fromString(loglevel, deflevel);
+		return create(logfile, lev);
+	}
+
+	static PStdLogProviderFactory create(const std::string &logfile, LogLevel lev) {
+		if (logfile.empty()) return new StdLogProviderFactory(lev);
+		else return new StdLogFile(logfile, lev);
+>>>>>>> branch 'master' of https://github.com/ondra-novak/ondra_shared.git
 	}
 
 protected:
