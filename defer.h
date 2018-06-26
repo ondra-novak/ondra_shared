@@ -248,7 +248,7 @@ void operator>>(DeferKeyword, Fn &&fn) {
  * situation.
  *
  */
-inline void defer_yield() {
+inline void defer_yield() noexcept {
 	IDeferContext *curContext = IDeferContext::include_defer_tcc_to_your_main_source;
 	if (curContext) curContext->yield();
 }
