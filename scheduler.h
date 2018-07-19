@@ -147,6 +147,15 @@ public:
 				this->dispatcher = nullptr;
 		}
 
+
+		static bool dispatcher_pump_or_wait_until(Dispatcher &dispatcher, const TimePoint &tp) {
+			if (tp == TimePoint::max()) {
+				return dispatcher.pump();
+			} else {
+				return dispatcher.pump_or_wait_until(tp);
+			}
+		}
+
 		template<typename InitFn>
 		void worker(InitFn && initFn) {
 			Dispatcher dispatcher;
@@ -157,7 +166,7 @@ public:
 
 			TimePoint tp = Clock::now();
 			TimePoint nx = execAllRetired(queue,tp);
-			while (dispatcher.pump_or_wait_until(nx)) {
+			while (dispatcher_pump_or_wait_until(dispatcher, nx)) {
 				TimePoint tp = Clock::now();
 				nx = execAllRetired(queue, tp);
 			}
