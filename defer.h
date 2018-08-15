@@ -32,8 +32,33 @@ public:
 		IDeferFunction *next;
 	};
 
-	///contains current defer_root
-	static thread_local IDeferContext *include_defer_tcc_to_your_main_source;
+	class EmptyDeleter {
+	public:
+		void operator()(IDeferContext *) const {}
+	};
+
+	template<typename T>
+	class PointerWrapper {
+	public:
+		PointerWrapper(T *x):x(x) {}
+		T *get() const {return x;}
+		bool operator==(const PointerWrapper &other) const {return x == other.x;}
+		bool operator!=(const PointerWrapper &other) const {return x != other.x;}
+	protected:
+		T *x = nullptr;
+	};
+
+	//HACK: It seems that GCC has bug to generate properly thread_local initialization in the function getInstance
+	//when the pointer to IDeferContext is simple or POD object. We use wrapper class
+
+	using PDeferContext = PointerWrapper<IDeferContext>;
+
+
+	static PDeferContext &getInstance() {
+		static thread_local PDeferContext instance(nullptr);
+		return instance;
+	}
+
 
 	///defer function call
 	/**
@@ -132,10 +157,10 @@ public:
 	 * @param kw specifies how is defer_root handled
 	 */
 	explicit DeferStack(DeferRootKW kw)
-		:prevContext(include_defer_tcc_to_your_main_source)
+		:prevContext(IDeferContext::getInstance().get())
 		,top(nullptr) {
-		if (include_defer_tcc_to_your_main_source == nullptr || kw ==  defer_root)
-			include_defer_tcc_to_your_main_source = this;
+		if (IDeferContext::getInstance() == nullptr || kw ==  defer_root)
+			IDeferContext::getInstance() = PDeferContext(this);
 	}
 
 	///Destructor
@@ -143,7 +168,7 @@ public:
 	~DeferStack() noexcept {
 		yield();
 		if (prevContext != this)
-			include_defer_tcc_to_your_main_source = prevContext;
+			IDeferContext::getInstance() = PDeferContext(prevContext);
 	}
 
 	virtual void yield() noexcept override {
@@ -231,7 +256,7 @@ enum DeferKeyword {
  */
 template<typename Fn>
 void operator>>(DeferKeyword, Fn &&fn) {
-	IDeferContext *curContext = IDeferContext::include_defer_tcc_to_your_main_source;
+	IDeferContext *curContext = IDeferContext::getInstance().get();
 	if (curContext == nullptr) {
 		DeferContext newContext(defer_root);
 		fn();
@@ -249,7 +274,7 @@ void operator>>(DeferKeyword, Fn &&fn) {
  *
  */
 inline void defer_yield() noexcept {
-	IDeferContext *curContext = IDeferContext::include_defer_tcc_to_your_main_source;
+	IDeferContext *curContext = IDeferContext::getInstance().get();
 	if (curContext) curContext->yield();
 }
 
