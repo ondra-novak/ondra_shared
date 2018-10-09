@@ -22,9 +22,9 @@ namespace ondra_shared {
 		typedef T Type;
 		typedef typename RemoveConst<T>::Result MutableType;
 
-		StringViewBase() :data(0), length(0) {}
-		StringViewBase(T *str) : data(str), length(calcLength(str)) {}
-		StringViewBase(T *str, std::size_t length): data(str),length(length) {}
+		constexpr StringViewBase() :data(0), length(0) {}
+		constexpr StringViewBase(T *str) : data(str), length(calcLength(str)) {}
+		constexpr StringViewBase(T *str, std::size_t length): data(str),length(length) {}
 
 		StringViewBase &operator=(const StringViewBase &other) {
 			if (&other != this) {
@@ -74,15 +74,8 @@ namespace ondra_shared {
 		T *begin() const { return data; }
 		T *end() const { return data + length; }
 
-		static std::size_t calcLength(T *str) {
-			T *p = str;
-			if (p) {
-				while (*p) ++p;
-				return p - str;
-			} else {
-				return 0;
-			}
-
+		constexpr static std::size_t calcLength(T *str) {
+			return (str && *str)?(calcLength(str+1)+1):(0);
 		}
 		bool empty() const {return length == 0;}
 
@@ -209,8 +202,8 @@ namespace ondra_shared {
 	public:
 		typedef StringViewBase< T> Base;
 		using StringViewBase< T>::StringViewBase;
-		MutableStringView() {}
-		MutableStringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
+		constexpr MutableStringView() {}
+		constexpr MutableStringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
 
 	};
 
@@ -219,14 +212,14 @@ namespace ondra_shared {
 	public:
 		typedef StringViewBase<const T> Base;
 		using StringViewBase<const T>::StringViewBase;
-		StringView() {}
-		StringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
-		StringView(const StringViewBase<const T> &other):Base(other.data, other.length) {}
-		StringView(const std::basic_string<T> &string) : Base(string.data(),string.length()) {}
-		StringView(const std::vector<T> &string) : Base(string.data(),string.size()) {}
-		StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
-		StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
-		StringView(const StringView &other):Base(other) {}
+		constexpr StringView() {}
+		constexpr StringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
+		constexpr StringView(const StringViewBase<const T> &other):Base(other.data, other.length) {}
+		constexpr StringView(const std::basic_string<T> &string) : Base(string.data(),string.length()) {}
+		constexpr StringView(const std::vector<T> &string) : Base(string.data(),string.size()) {}
+		constexpr StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
+		constexpr StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
+		constexpr StringView(const StringView &other):Base(other) {}
 
 		StringView substr(std::size_t index) const {
 			return StringView(Base::substr(index));

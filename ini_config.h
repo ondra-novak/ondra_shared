@@ -169,6 +169,7 @@ protected:
 
 inline std::string IniConfig::Value::getPath() const {
 	std::string s;
+	if (v.empty()) return std::string();
 	s.reserve(v.getLength() + p.getLength());
 	s.append(p.getData(),p.getLength());
 	s.append(v.getData(),v.getLength());
