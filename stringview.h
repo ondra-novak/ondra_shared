@@ -227,6 +227,12 @@ namespace ondra_shared {
 		StringView substr(std::size_t index, std::size_t len) const {
 			return StringView(Base::substr(index,len));
 		}
+		bool begins(const StringView &prefix) const {
+			return substr(0,prefix.length) == prefix;
+		}
+		bool ends(const StringView &suffix) const {
+			return suffix.length<this->length && substr(this->length-suffix.length) == suffix;
+		}
 
 
 		class SplitFn: public Base::SplitFn {
