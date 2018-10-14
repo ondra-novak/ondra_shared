@@ -43,5 +43,5 @@ defer : defer.cpp
 
 -include shared_function.deps
 shared_function : shared_function.cpp 
-	g++ $(CXXFLAGS) -o shared_function shared_function.cpp -MMD -MF shared_function.deps -MT shared_function 
+	g++ $(CXXFLAGS) -o shared_function shared_function.cpp -MMD -MF shared_function.deps -MT shared_function -lpthread  
 
