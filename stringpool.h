@@ -71,8 +71,12 @@ public:
 		bool operator<(const String &other) const {return getView() < other.getView();}
 		bool operator>=(const String &other) const {return getView()>= other.getView();}
 		bool operator<=(const String &other) const {return getView()<= other.getView();}
+
+		void relocate(StringPool &newPool) const {
+			if (this->buffer != nullptr) this->buffer = &newPool.data;
+		}
 	protected:
-		const std::vector<T> *buffer;
+		mutable const std::vector<T> *buffer;
 		union {
 			std::size_t offset;
 			const T *ptr;
@@ -107,9 +111,9 @@ public:
 	}
 
 	StringPool() {}
-	StringPool(StringPool &&other):data(std::move(data)) {}
+	StringPool(StringPool &&other):data(std::move(other.data)) {}
 	StringPool &operator=(StringPool &&other) {
-		data = std::move(data);
+		data = std::move(other.data);
 		return *this;
 	}
 
