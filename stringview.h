@@ -5,8 +5,9 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
-
-
+#if __cplusplus >= 201703L
+#include <string_view>
+#endif
 
 namespace ondra_shared {
 
@@ -35,7 +36,9 @@ namespace ondra_shared {
 		}
 
 		operator std::basic_string<MutableType>() const { return std::basic_string<MutableType>(data, length); }
-
+#if __cplusplus >= 201703L
+		operator std::basic_string_view<MutableType>() const { return std::basic_string_view<MutableType>(data, length); }
+#endif
 		StringViewBase substr(std::size_t index) const {
 			std::size_t indexadj = std::min(index, length);
 			return StringViewBase(data + indexadj, length - indexadj);
@@ -220,7 +223,9 @@ namespace ondra_shared {
 		constexpr StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
 		constexpr StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
 		constexpr StringView(const StringView &other):Base(other) {}
-
+#if __cplusplus >= 201703L
+		constexpr StringView(const std::basic_string_view<T> &str):Base(str.data(), str.length()) {}
+#endif
 		StringView substr(std::size_t index) const {
 			return StringView(Base::substr(index));
 		}
