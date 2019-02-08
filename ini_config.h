@@ -37,12 +37,14 @@ public:
 		std::string getPath() const;
 		std::size_t getUInt() const;
 		std::intptr_t getInt() const;
+		bool getBool() const;
 		double getNumber() const;
 		StrViewA getString() const {return v.getView();}
 		const char *c_str() const {return v.getView().data;}
 
 		std::string getPath(std::string &&default_path) const;
 		std::size_t getUInt(std::size_t default_value) const;
+		bool getBool(bool default_value) const;
 		std::intptr_t getInt(std::size_t default_value) const;
 		double getNumber(double default_value) const;
 		StrViewA getString(const StrViewA &default_value) const;
@@ -276,6 +278,26 @@ inline std::size_t IniConfig::Value::getUInt() const {
 	return x;
 }
 
+inline bool IniConfig::Value::getBool() const {
+
+	constexpr auto cmpstr = [](StrViewA a, StrViewA b) {
+		if (a.length == b.length) {
+			for (std::size_t i = 0; i < a.length; i++)
+				if (toupper(a[i]) != toupper(b[i])) return false;
+			return true;
+		} else {
+			return false;
+		}
+	};
+
+	constexpr StrViewA yes_forms[] = {"true","1","yes","y"};
+	auto sv = getString();
+	for (auto && x: yes_forms) {
+		if (cmpstr(sv,x)) return true;
+	}
+	return false;
+}
+
 inline std::intptr_t IniConfig::Value::getInt() const {
 	auto sv = v.getView();
 	if (sv.empty()) return 0;
@@ -325,6 +347,11 @@ inline std::size_t IniConfig::Value::getUInt(std::size_t default_value) const {
 
 inline std::intptr_t IniConfig::Value::getInt(std::size_t default_value) const {
 	if (defined()) return getInt();
+	else return default_value;
+}
+
+inline bool IniConfig::Value::getBool(bool default_value) const {
+	if (defined()) return getBool();
 	else return default_value;
 }
 
