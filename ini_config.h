@@ -50,12 +50,16 @@ public:
 		StrViewA getString(const StrViewA &default_value) const;
 		const char *c_str(const char *default_value) const;
 
+		template<typename T>
+		static void checkSuffix(char c, T &v);
 
 		static const Value &undefined() {
-			static Value udef;
+			static Value udef(String(StrViewA("undef",0)), String());
 			return udef;
 		}
-		bool defined() const {return this != &undefined();}
+		bool defined() const {
+			return this->v.getData() != undefined().v.getData();
+		}
 	};
 
 	class NotFoundException: public std::exception {
@@ -269,11 +273,36 @@ inline void IniConfig::load(const std::string& pathname) {
 	load(pathname, [](const IniItem &){} );
 }
 
+template<typename T>
+inline void IniConfig::Value::checkSuffix(char c, T &v) {
+	switch (c) {
+	//12s = 12 seconds = 12000 miliseconds
+	case 's': v = v * static_cast<T>(1000);break;
+	//5m = 5 minutes = 300000 miliseconds
+	case 'm': v = v * static_cast<T>(60000);break;
+	//4h = 4 hours
+	case 'h': v = v * static_cast<T>(3600000);break;
+	//2d = 2 days
+	case 'd': v = v * static_cast<T>(24*3600000);break;
+	//124K = 125 Kilo (1000x)
+	case 'K':
+	//124k = 125 kilo (1000x)
+	case 'k': v = v * static_cast<T>(1000);break;
+	//32M = 32 mega (1000x1000)
+	case 'M': v = v * static_cast<T>(1000000);break;
+	//21G = 21 giga(1000x1000x1000)
+	case 'G': v = v * static_cast<T>(1000000000);break;
+	}
+}
+
 inline std::size_t IniConfig::Value::getUInt() const {
 	std::size_t x = 0;
 	for (char c : v.getView()) {
 		if (isdigit(c)) x = x * 10 + (c - '0');
-		else break;
+		else {
+			checkSuffix(c, x);
+			break;
+		}
 	}
 	return x;
 }
@@ -361,7 +390,10 @@ inline StrViewA IniConfig::Value::getString(const StrViewA& default_value) const
 }
 
 inline double IniConfig::Value::getNumber() const {
-	return strtod(c_str(),nullptr);
+	char *c;
+	double d = strtod(c_str(),&c);
+	if (c) checkSuffix(*c,d);
+	return d;
 }
 
 inline double IniConfig::Value::getNumber(double default_value) const {
