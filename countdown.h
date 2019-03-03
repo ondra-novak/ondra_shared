@@ -148,6 +148,23 @@ protected:
 	std::atomic<int> counter ;
 };
 
+///Helps to count of locks, can be included into clousure of asynchronous function
+class CountdownGuard {
+public:
+	CountdownGuard(Countdown &owner):owner(owner) {
+		this->owner.inc();
+	}
+	~CountdownGuard() {
+		this->owner.dec();
+	}
+	CountdownGuard(const CountdownGuard &other):owner(other.owner) {
+		this->owner.inc();
+	}
+protected:
+	Countdown &owner;
+};
+
+
 
 }
 #endif
