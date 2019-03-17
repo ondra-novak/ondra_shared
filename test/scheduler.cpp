@@ -11,6 +11,8 @@
 #include "../scheduler.h"
 #include "../sch2wrk.h"
 #include "../future.h"
+#include "../defer.tcc"
+
 #include <chrono>
 
 using namespace std::literals::chrono_literals;

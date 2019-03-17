@@ -4,7 +4,7 @@
 #CXXFLAGS=-std=c++14 -Wall -Werror -O3 -Wno-noexcept-type
 CXXFLAGS=-std=c++14 -Wall -Werror -O0 -ggdb -Wno-noexcept-type
 
-all: worker scheduler apply scheduler_1thread
+all: worker scheduler apply scheduler_1thread future_test defer shared_function
 clean:
 	rm -f worker
 	rm -f scheduler
@@ -12,6 +12,9 @@ clean:
 	rm -f scheduler_1thread
 	rm -f *.deps
 	rm -f worker.pgm
+	rm -f future_test
+	rm -f defer
+	rm -f shared_function
 
 -include worker.deps
 worker : worker.cpp 
@@ -29,4 +32,16 @@ scheduler_1thread : scheduler_1thread.cpp
 apply : apply.cpp 
 	g++ $(CXXFLAGS) -o apply apply.cpp -MMD -MF apply.deps -MT apply
 
+-include future_test.deps
+future_test : future_test.cpp 
+	g++ $(CXXFLAGS) -o future_test future_test.cpp -MMD -MF future_test.deps -MT future_test -lpthread
+
+
+-include defer.deps
+defer : defer.cpp 
+	g++ $(CXXFLAGS) -o defer defer.cpp -MMD -MF defer.deps -MT defer 
+
+-include shared_function.deps
+shared_function : shared_function.cpp 
+	g++ $(CXXFLAGS) -o shared_function shared_function.cpp -MMD -MF shared_function.deps -MT shared_function -lpthread  
 

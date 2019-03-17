@@ -227,6 +227,12 @@ template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed int v) {
 template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed short v) {signedToString(v,wr);}
 template<typename WriteFn> void logPrintValue(const WriteFn &wr, double v) {floatToString(v,wr,8);}
 template<typename WriteFn> void logPrintValue(const WriteFn &wr, float v) {floatToString(v,wr,8);}
+template<typename WriteFn, typename T> void logPrintValue(const WriteFn &wr, const std::initializer_list<T> &v) {
+	for (auto &&x:v ) {
+		wr(" ");
+		logPrintValue(wr, x);
+	}
+}
 template<typename WriteFn, typename T> void logPrintValue(const WriteFn &wr, T *v) {
 	std::uintptr_t w = reinterpret_cast<std::uintptr_t>(v);
 	unsignedToString(w,wr,16,sizeof(w)*2);

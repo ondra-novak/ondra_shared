@@ -8,12 +8,14 @@
 #include "refcnt.h"
 #include "waitableEvent.h"
 #include "stringview.h"
+#include "defer.h"
 
 
 namespace ondra_shared {
 
 
 template<typename FT> class FutureExceptionalState;
+class FutureWaitableEvent;
 ///Generic variable contains a immutable value which is initialized in the future
 /**
  * The instance of the FutureValue is immovable and immutable shared state between multiple threads.
@@ -126,7 +128,7 @@ public:
 	 *
 	 * @return new waitable event
 	 */
-	std::shared_ptr<WaitableEvent> create_waitable_event();
+	std::shared_ptr<FutureWaitableEvent> create_waitable_event();
 
 	///Asynchronous waiting
 	/**
@@ -222,17 +224,19 @@ protected:
 	template<typename Fn1, typename Fn2> class WaitHandlerAwaitCatch;
 	template<typename Fn> class WaitHandlerCatch;
 
-	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(t)) {
-		return fn(t);
+	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(t),void()) {
+		defer >> [t=T(t),fn=Fn(fn)]() mutable {fn(t);};
 	}
-	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn()) {
-		return fn();
+	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(),void()) {
+		defer >> fn;
 	}
-	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t)) {
-		return fn(t);
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t),void()) {
+		defer >> [t=std::exception_ptr(t),fn=Fn(fn)]() mutable {fn(t);};
+		fn(t);
 	}
-	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn()) {
-		return fn();
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(),void()) {
+		defer >> fn;
+		fn();
 	}
 
 	bool lockResolve() {
@@ -312,6 +316,15 @@ public:
 	 */
 	void set(Future<T> value);
 
+	///Cals specified function and uses result to resolve the future
+	/**
+	 * @param fn function to call
+	 * @param args arguments
+	 */
+	template<typename Fn, typename ... Args>
+	void set_result_of(Fn &&fn, Args && ... args);
+
+
 	///Reject the future with an exception
 	/**
 	 * @param exception exception
@@ -324,7 +337,7 @@ public:
 	 */
 	void wait() const;
 
-	std::shared_ptr<WaitableEvent> create_waitable_event();
+	std::shared_ptr<FutureWaitableEvent> create_waitable_event();
 
 	///Asynchronous waiting
 	/**
@@ -452,67 +465,13 @@ protected:
 
 template<typename R> class FutureFromType {
 public: typedef Future<typename std::remove_reference<R>::type> type;
-	template<typename Fn>
-	static void callFnSetValue(type &f, Fn &&fn) {
-		try {
-			f.set(fn());
-		} catch (...) {
-			f.reject();
-		}
-	}
-	template<typename Fn, typename X>
-	static void callFnSetValue(type &f, Fn &&fn, X &&x) {
-		try {
-			f.set(fn(std::forward<X>(x)));
-		} catch (...) {
-			f.reject();
-		}
-	}
 };
 template<typename R> class FutureFromType< Future<R> > {
-public:
-	typedef Future<R> type;
-	template<typename Fn>
-	static void callFnSetValue(type &f, Fn &&fn) {
-		try {
-			f.set(fn());
-		} catch (...) {
-			f.reject();
-		}
-	}
-	template<typename Fn, typename X>
-	static void callFnSetValue(type &f, Fn &&fn, X &&x) {
-		try {
-			f.set(fn(std::forward<X>(x)));
-		} catch (...) {
-			f.reject();
-		}
-	}
-
-
+public: typedef Future<R> type;
 };
-
 struct FutureEmptyValue{};
-
-template<> class FutureFromType<void> {
-public:
-	typedef Future<FutureEmptyValue> type;
-	template<typename Fn>
-	static void callFnSetValue(type &f, Fn &&fn) {
-		try {
-			fn(); f.set(FutureEmptyValue());
-		} catch (...) {
-			f.reject();
-		}
-	}
-	template<typename Fn, typename X>
-	static void callFnSetValue(type &f, Fn &&fn, X &&x) {
-		try {
-			fn(std::forward<X>(x)); f.set(FutureEmptyValue());
-		} catch (...) {
-			f.reject();
-		}
-	}
+template<> class FutureFromType< Future<FutureEmptyValue> > {
+public: typedef Future<void> type;
 };
 
 
@@ -522,6 +481,26 @@ public:
 	Future() {}
 	Future(const Future<FutureEmptyValue> &e):Future<FutureEmptyValue>(e) {}
 	using Future<FutureEmptyValue>::Future;
+
+	static Future resolve() {
+		Future<void> f;
+		f.set();
+		return f;
+	}
+
+	void set() {
+		Future<FutureEmptyValue>::set(FutureEmptyValue());
+	}
+	void set(const Future<void> &f) {
+		Future<FutureEmptyValue>::set(f);
+	}
+	template<typename Fn, typename ... Args>
+	void set_result_of(Fn &&fn, Args && ... args);
+protected:
+	template<typename Fn, typename ... Args>
+	void set_result_of_select(std::true_type, Fn &&fn, Args && ... args);
+	template<typename Fn, typename ... Args>
+	void set_result_of_select(std::false_type, Fn &&fn, Args && ... args);
 };
 
 
@@ -548,12 +527,14 @@ bool FutureValue<T>::resolve(const Fn &fn, const ValueType &value, AbstractWatch
 
 	AbstractWatchHandler *chain = watchChain.exchange(nullptr);
 
+
 	//walk the chain
 	while (chain != nullptr) {
 		AbstractWatchHandler *z = chain;
 		chain = z->next;
 		//skip handler if equal
 		if (z != skip) {
+
 			(z->*fn)(value);
 			z->release();
 		} else {
@@ -694,6 +675,8 @@ inline void FutureValue<T>::wait() const {
 	WaitHandler wh;
 	//add handler, if true returned - already resolved
 	if (const_cast<FutureValue<T> *>(this)->addHandler(&wh)) return;
+	//yeild any defered function (to prevent deadlock)
+	defer_yield();
 	//acquire the lock
 	std::unique_lock<std::mutex> mx(wh.lock);
 	//wait for being fired.
@@ -747,9 +730,20 @@ inline bool FutureValue<T>::addHandler(AbstractWatchHandler *h) {
 	return b;
 }
 
+class FutureWaitableEvent: public WaitableEvent {
+public:
+	using WaitableEvent::WaitableEvent;
+
+	bool wait(unsigned int timeout_ms) {defer_yield();return c.wait(timeout_ms);}
+	void wait() {defer_yield();c.wait();}
+	template<typename TimePoint> bool wait_until(const TimePoint &tp) {defer_yield();return c.wait_until(tp);}
+	template<typename Duration> bool wait_for(const Duration &dur) {defer_yield();return c.wait_for(dur);}
+
+};
+
 template<typename T>
-inline std::shared_ptr<WaitableEvent> FutureValue<T>::create_waitable_event()  {
-	std::shared_ptr<WaitableEvent> ev (std::make_shared<WaitableEvent>(false));
+inline std::shared_ptr<FutureWaitableEvent> FutureValue<T>::create_waitable_event()  {
+	std::shared_ptr<FutureWaitableEvent> ev (std::make_shared<FutureWaitableEvent>(false));
 
 	auto fn = [ev] {
 		ev->signal();
@@ -943,7 +937,7 @@ template<typename T> void Future<T>::wait() const {
 	v->wait();
 }
 
-template<typename T> inline std::shared_ptr<WaitableEvent> Future<T>::create_waitable_event() {
+template<typename T> inline std::shared_ptr<FutureWaitableEvent> Future<T>::create_waitable_event() {
 	return v->create_waitable_event();
 }
 
@@ -960,7 +954,7 @@ template<typename T> template<typename ExceptFn> bool Future<T>::await_catch(Exc
 template<typename T> template<typename Fn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(Fn &&fn) {
 	typename Future<T>::template RetFnThen<Fn> f;
 	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &val) mutable {
-		FutureFromType<decltype(fn(val))>::callFnSetValue(f,fn,val);
+		f.set_result_of(fn, val);
 	},[f](const std::exception_ptr &e) mutable  {
 		f.reject(e);
 	});
@@ -969,7 +963,7 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThen<Fn> Future<T>::then(Fn &&fn, ExceptFn &&exceptFn) {
 	typename Future<T>::template RetFnThen<Fn>  f;
 	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &val) mutable {
-		FutureFromType<decltype(fn(val))>::callFnSetValue(f,fn,val);
+		f.set_result_of(fn, val);
 	},[f,efn=ExceptFn(std::forward<ExceptFn>(exceptFn))](const std::exception_ptr &e) mutable  {
 		try {
 			f.set(efn(e));
@@ -982,7 +976,7 @@ template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>
 template<typename T> template<typename Fn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(Fn &&fn) {
 	typename Future<T>::template RetFnThenVoid<Fn> f;
 	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &) mutable {
-		FutureFromType<decltype(fn())>::callFnSetValue(f,fn);
+		f.set_result_of(fn);
 	},[f](const std::exception_ptr &e) mutable  {
 		f.reject(e);
 	});
@@ -991,7 +985,7 @@ template<typename T> template<typename Fn> typename Future<T>::template RetFnThe
 template<typename T> template<typename Fn, typename ExceptFn> typename Future<T>::template RetFnThenVoid<Fn> Future<T>::then(Fn &&fn, ExceptFn &&exceptFn) {
 	typename Future<T>::template RetFnThenVoid<Fn>  f;
 	v->then([f,fn=Fn(std::forward<Fn>(fn))](const T &) mutable {
-		FutureFromType<decltype(fn())>::callFnSetValue(f,fn);
+		f.set_result_of(fn);
 	},[f,efn=ExceptFn(std::forward<ExceptFn>(exceptFn))](const std::exception_ptr &e) mutable {
 		try {
 			f.set(efn(e));
@@ -1022,7 +1016,13 @@ template<typename T> template<typename Fn> void FutureValue<T>::finally(Fn &&fn)
 		std::remove_reference_t<Fn> fn;
 	};
 
-	addHandler(new Spec(fn));
+	if (is_resolved()) {
+		defer >> fn;
+	}
+	else {
+		if (addHandler(new Spec(fn)))
+			defer >> fn;
+	}
 
 }
 
@@ -1130,10 +1130,76 @@ Future<T> Future<T>::race(std::initializer_list<Future<T> > &&flist) {
 	return _details::future_race_impl<T, std::initializer_list<Future<T> > >(std::forward<std::initializer_list<Future<T> > >(flist));
 }
 
+template<typename T>
+template<typename Fn, typename ... Args>
+inline void Future<T>::set_result_of(Fn &&fn, Args && ... args) {
+	try {
+		set(T(fn(std::forward<Args>(args)...)));
+	} catch (...) {
+		reject();
+	}
+}
 
+
+template<typename Fn, typename ... Args>
+inline void Future<void>::set_result_of(Fn &&fn, Args && ... args) {
+	set_result_of_select(
+			typename std::is_void<decltype(fn(std::forward<Args>(args)...))>::type(),
+			std::forward<Fn>(fn),
+			std::forward<Args>(args)...);
+}
+template<typename Fn, typename ... Args>
+inline void Future<void>::set_result_of_select(std::true_type,Fn &&fn, Args && ... args) {
+	try {
+		fn(std::forward<Args>(args)...);set();
+	} catch (...) {
+		reject();
+	}
+}
+template<typename Fn, typename ... Args>
+inline void Future<void>::set_result_of_select(std::false_type,Fn &&fn, Args && ... args) {
+	try {
+		set(fn(std::forward<Args>(args)...));
+	} catch (...) {
+		reject();
+	}
+}
+
+
+template<typename Fn>
+class FutureCall: public FutureFromType<decltype(std::declval<Fn>()())>::type {
+public:
+
+	typedef typename FutureFromType<decltype(std::declval<Fn>()())>::type Future;
+	FutureCall(Fn &&fn):fn(std::forward<Fn>(fn)) {}
+
+	Future operator()() const {
+		Future(*this).set_result_of(std::forward<Fn>(fn));
+		return *this;
+	}
+	template<typename X>
+	Future operator >> (X && x) const {
+		x >> [me=Future(*this),fn = this->fn]() mutable {
+			me.set_result_of(fn);
+		};
+		return *this;
+	}
+
+protected:
+	mutable std::remove_reference_t<Fn> fn;
+};
+
+enum FutureCallKW {
+	future_call
+};
+
+template<typename Fn>
+auto operator>> (FutureCallKW, Fn &&fn) {
+	return FutureCall<Fn>(std::forward<Fn>(fn));
 }
 
 
 
+};
 
 #endif

@@ -37,14 +37,29 @@ public:
 		std::string getPath() const;
 		std::size_t getUInt() const;
 		std::intptr_t getInt() const;
+		bool getBool() const;
+		double getNumber() const;
 		StrViewA getString() const {return v.getView();}
 		const char *c_str() const {return v.getView().data;}
 
+		std::string getPath(std::string &&default_path) const;
+		std::size_t getUInt(std::size_t default_value) const;
+		bool getBool(bool default_value) const;
+		std::intptr_t getInt(std::size_t default_value) const;
+		double getNumber(double default_value) const;
+		StrViewA getString(const StrViewA &default_value) const;
+		const char *c_str(const char *default_value) const;
+
+		template<typename T>
+		static void checkSuffix(char c, T &v);
+
 		static const Value &undefined() {
-			static Value udef;
+			static Value udef(String(StrViewA("undef",0)), String());
 			return udef;
 		}
-		bool defined() const {return this != &undefined();}
+		bool defined() const {
+			return this->v.getData() != undefined().v.getData();
+		}
 	};
 
 	class NotFoundException: public std::exception {
@@ -102,22 +117,27 @@ public:
 
 		friend class IniConfig;
 	};
+
+
+	using Section = KeyValueMap;
+
 	typedef std::map<String, KeyValueMap> SectionMap;
 
 
-	const KeyValueMap &operator[](const StrViewA &sectionName) const;
+	const Section &operator[](const StrViewA &sectionName) const;
 	SectionMap::const_iterator begin() const;
 	SectionMap::const_iterator end() const;
 
 
 	template<typename Fn, typename D>
-	void load(const Fn &fn, StrViewA path, const D &directives);
+	void load(const Fn &fn, const StrViewA &path, const D &directives, const StrViewA &curSection);
 
 	template<typename D>
-	bool load(const std::string &pathname, const D &directives);
+	bool load(const std::string &pathname, const D &directives, const StrViewA &curSection = StrViewA());
 
 	void load(const std::string &pathname);
 
+	Value createValue(const String &value);
 
 	void load(const IniItem &item);
 
@@ -130,9 +150,16 @@ public:
 
 
 #ifdef _WIN32
-	char pathSeparator='\\';
+	StrViewA pathSeparator="\\";
+	static inline bool isRooted(StrViewA path) {
+		return !path.empty() && (path[0] == '\\' ||
+				(path.length > 2 && isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));
+	}
 #else
-	char pathSeparator='/';
+	StrViewA pathSeparator="/";
+	static inline bool isRooted(StrViewA path) {
+		return !path.empty() && path[0] == '/';
+	}
 #endif
 
 protected:
@@ -148,6 +175,7 @@ protected:
 
 inline std::string IniConfig::Value::getPath() const {
 	std::string s;
+	if (v.empty()) return std::string();
 	s.reserve(v.getLength() + p.getLength());
 	s.append(p.getData(),p.getLength());
 	s.append(v.getData(),v.getLength());
@@ -173,54 +201,70 @@ inline IniConfig::SectionMap::const_iterator IniConfig::end() const {
 }
 
 template<typename Fn, typename D>
-inline void IniConfig::load(const Fn& fn, StrViewA path, const D& directives) {
+inline void IniConfig::load(const Fn &fn, const StrViewA &path, const D &directives, const StrViewA &curSection) {
 
-	auto processFn = [this,directives](const IniItem &item) {
-		if (item.type == IniItem::data)	this->load(item);
-		else if (item.type == IniItem::directive) directives(item);
+	String prevPath = curPath;
+	auto f1 = finally([&]{curPath = prevPath;});
+
+	auto sep = path.lastIndexOf(pathSeparator);
+	if (sep != path.npos) {
+		StrViewA newpath = StrViewA(path).substr(0,sep+1);
+		curPath = pool.add(newpath);
+	}
+
+
+	class ProcessFn {
+	public:
+		IniConfig &owner;
+		const D &directives;
+		StrViewA curSection;
+
+		void operator()(const IniItem &item) const {
+			if (item.section.empty() && !curSection.empty()) {
+				IniItem newItem = item;
+				newItem.section = curSection;
+				operator()(item);
+			} else {
+				if (item.type == IniItem::data)	owner.load(item);
+				else if (item.type == IniItem::directive) directives(item);
+			}
+		}
+
+		ProcessFn(IniConfig &owner, const D &directives, const StrViewA &curSection)
+			:owner(owner),directives(directives),curSection(curSection) {}
 	};
-	IniParser<decltype(processFn)> parser;
+
+	ProcessFn processFn(*this, directives, curSection);
+	IniParser<ProcessFn> parse(processFn);
+
 	int i = fn();
 	while (i != -1) {
-		parser(i);
+		parse(i);
 		i = fn();
 	}
 
 }
 
 template<typename D>
-inline bool IniConfig::load(const std::string& pathname,const D& directives) {
+inline bool IniConfig::load(const std::string& pathname,const D& directives, const StrViewA &curSection) {
 
-
-	String prevPath = curPath;
-	auto f1 = finally([&]{curPath = prevPath;});
-	std::string dummy;
 
 	std::ifstream input(pathname);
 	if (!input) return false;
-	auto sep = pathname.find(pathSeparator);
-	if (sep != pathname.npos) {
-		StrViewA newpath = StrViewA(pathname).substr(0,sep+1);
-		curPath = pool.add(newpath);
-	}
-	auto processFn = [this,directives](const IniItem &item) {
-		if (item.type == IniItem::data)	this->load(item);
-		else if (item.type == IniItem::directive) {
-			if (item.key == "include") {
-				Value v(item.value, curPath);
-				if (this->load(v.getPath(),directives)) return;
-			}
-			directives(item);
+
+	auto mydirect = [this, directives](const IniItem &item) {
+		if (item.key == "include") {
+			Value v(createValue(item.value));
+			if (this->load(v.getPath(),directives, item.section)) return;
 		}
+		directives(item);
 	};
 
-	IniParser<decltype(processFn)> parser(processFn);
-	int i = input.get();
-	while (i != -1) {
-		parser(i);
-		i = input.get();
-	}
+	auto reader = [&]{
+		return input.get();
+	};
 
+	load(reader, pathname, mydirect, curSection);
 	return true;
 }
 
@@ -229,13 +273,58 @@ inline void IniConfig::load(const std::string& pathname) {
 	load(pathname, [](const IniItem &){} );
 }
 
+template<typename T>
+inline void IniConfig::Value::checkSuffix(char c, T &v) {
+	switch (c) {
+	//12s = 12 seconds = 12000 miliseconds
+	case 's': v = v * static_cast<T>(1000);break;
+	//5m = 5 minutes = 300000 miliseconds
+	case 'm': v = v * static_cast<T>(60000);break;
+	//4h = 4 hours
+	case 'h': v = v * static_cast<T>(3600000);break;
+	//2d = 2 days
+	case 'd': v = v * static_cast<T>(24*3600000);break;
+	//124K = 125 Kilo (1000x)
+	case 'K':
+	//124k = 125 kilo (1000x)
+	case 'k': v = v * static_cast<T>(1000);break;
+	//32M = 32 mega (1000x1000)
+	case 'M': v = v * static_cast<T>(1000000);break;
+	//21G = 21 giga(1000x1000x1000)
+	case 'G': v = v * static_cast<T>(1000000000);break;
+	}
+}
+
 inline std::size_t IniConfig::Value::getUInt() const {
 	std::size_t x = 0;
 	for (char c : v.getView()) {
 		if (isdigit(c)) x = x * 10 + (c - '0');
-		else break;
+		else {
+			checkSuffix(c, x);
+			break;
+		}
 	}
 	return x;
+}
+
+inline bool IniConfig::Value::getBool() const {
+
+	constexpr auto cmpstr = [](StrViewA a, StrViewA b) {
+		if (a.length == b.length) {
+			for (std::size_t i = 0; i < a.length; i++)
+				if (toupper(a[i]) != toupper(b[i])) return false;
+			return true;
+		} else {
+			return false;
+		}
+	};
+
+	constexpr StrViewA yes_forms[] = {"true","1","yes","y"};
+	auto sv = getString();
+	for (auto && x: yes_forms) {
+		if (cmpstr(sv,x)) return true;
+	}
+	return false;
 }
 
 inline std::intptr_t IniConfig::Value::getInt() const {
@@ -250,6 +339,16 @@ inline std::intptr_t IniConfig::Value::getInt() const {
 	}
 }
 
+inline IniConfig::Value IniConfig::createValue(const String &value) {
+	Value vv;
+	if (isRooted(value)) {
+		vv.p = StrViewA();
+	} else {
+		vv.p = curPath;
+	}
+	vv.v = value;
+	return vv;
+}
 inline void IniConfig::load(const IniItem& item) {
 	auto s = smap.find(item.section);
 	KeyValueMap *kv;
@@ -260,11 +359,51 @@ inline void IniConfig::load(const IniItem& item) {
 	kv = &s->second;
 	String k = pool.add(item.key);
 	String v = pool.add(item.value);
-	Value vv;
-	vv.p = curPath;
-	vv.v = v;
+	Value vv = createValue(v);
 	kv->insert(std::make_pair(k,vv));
+}
 
+inline std::string IniConfig::Value::getPath(std::string&& default_path) const {
+	if (defined()) return getPath();
+	else return std::move(default_path);
+}
+
+inline std::size_t IniConfig::Value::getUInt(std::size_t default_value) const {
+	if (defined()) return getUInt();
+	else return default_value;
+
+}
+
+inline std::intptr_t IniConfig::Value::getInt(std::size_t default_value) const {
+	if (defined()) return getInt();
+	else return default_value;
+}
+
+inline bool IniConfig::Value::getBool(bool default_value) const {
+	if (defined()) return getBool();
+	else return default_value;
+}
+
+inline StrViewA IniConfig::Value::getString(const StrViewA& default_value) const {
+	if (defined()) return getString();
+	else return default_value;
+}
+
+inline double IniConfig::Value::getNumber() const {
+	char *c;
+	double d = strtod(c_str(),&c);
+	if (c) checkSuffix(*c,d);
+	return d;
+}
+
+inline double IniConfig::Value::getNumber(double default_value) const {
+	if (defined()) return getNumber();
+	else return default_value;
+}
+
+inline const char* IniConfig::Value::c_str(const char* default_value) const {
+	if (defined()) return c_str();
+	else return default_value;
 }
 
 }

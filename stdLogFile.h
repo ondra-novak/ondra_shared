@@ -44,7 +44,7 @@ public:
 
 	void setCurrent() {
 		AbstractLogProviderFactory::getInstance() = this;
-		AbstractLogProvider::getInstance() = create();
+		AbstractLogProvider::getInstance() = StdLogProviderFactory::create();
 	}
 
 	void reopenLog() {
@@ -56,6 +56,30 @@ public:
 		outfile << line << std::endl;
 	}
 
+
+	///Create standard log to file
+	/**
+	 * @param pathname pathname to file, if empty, stderr is used
+	 * @param minLevel minimal level
+	 * @return log provider
+	 */
+	static PStdLogProviderFactory create(StrViewA pathname, LogLevel minLevel) {
+		if (pathname.empty()) return new StdLogProviderFactory(minLevel);
+		else return new StdLogFile(pathname, minLevel);
+	}
+
+	///Create standard log to file
+	/**
+	 * @param pathname pathname to file, if empty, stderr is used
+	 * @param level text value for level
+	 * @param defaultLevel value used if the text value is not resolved or empty
+	 * @return log provider
+	 */
+	static PStdLogProviderFactory create(StrViewA pathname, StrViewA level, LogLevel defaultLevel) {
+		LogLevelToStrTable lstr;
+		auto l = lstr.fromString(level,defaultLevel);
+		return create(pathname, l);
+	}
 
 protected:
 

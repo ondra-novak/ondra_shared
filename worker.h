@@ -237,18 +237,10 @@ public:
 	///Converts current thread to worker's thread complete
 	void run() const {wrk->run();}
 
-	///Call the function asynchronously in the context of the worker and return Future
-	/**
-	 * @param fn function to call
-	 * @return Future containing return value of the function
-	 */
+
 	template<typename Fn>
-	auto operator>>(Fn &&fn) const {
-		typename FutureFromType<decltype(std::declval<Fn>()())>::type fut;
-		dispatch([fut,f = std::remove_reference_t<Fn>(fn)] ()mutable {
-			FutureFromType<decltype(std::declval<Fn>()())>::callFnSetValue(fut,f);
-		});
-		return fut;
+	void operator >> (Fn &&fn) const {
+		dispatch(std::forward<Fn>(fn));
 	}
 
 protected:
@@ -256,72 +248,6 @@ protected:
 	RefCntPtr<AbstractWorker> wrk;
 
 };
-
-
-namespace _details {
-template<typename Fut>
-class WorkerFutureChain {
-public:
-	template<typename FutR, typename WrkR>
-	WorkerFutureChain(FutR && fut, WrkR && wrk):fut(fut),wrk(wrk) {}
-
-	template<typename Fn>
-	auto operator >> (Fn &&fn) {
-		typedef std::remove_reference_t<decltype(fut.get())> ValueType;
-
-		return fut >> [wrk = this->wrk, fn = std::remove_reference_t<Fn>(fn)](const ValueType & vt) mutable {
-			Future<ValueType> fut;
-			auto res = fut >> fn;
-
-			wrk.dispatch([fut,v = ValueType(vt)] () mutable {
-				fut.set(v);
-			});
-			return res;
-		};
-	}
-
-protected:
-	Fut fut;
-	Worker wrk;
-};
-
-template<typename Fut>
-class WorkerFutureExceptionChain {
-public:
-	template<typename FutR, typename WrkR>
-	WorkerFutureExceptionChain(FutR && fut, WrkR && wrk):fut(fut),wrk(wrk) {}
-
-	template<typename Fn>
-	auto operator >> (Fn &&fn) {
-
-		return fut.then_catch([wrk = this->wrk,  fn = std::remove_reference_t<Fn>(fn)](const std::exception_ptr & e) mutable {
-			typename FutureFromType<decltype(std::declval<Fn>()(e))>::type fut;
-			wrk.dispatch([fut,fn, e = std::exception_ptr(e)] () mutable {
-					try {
-						fut.set(fn(e));
-					} catch (...) {
-						fut.reject();
-					}
-			});
-			return fut;
-		});
-	}
-
-protected:
-	Fut fut;
-	Worker wrk;
-};
-}
-template<typename T>
-auto operator >> (const Future<T> &fut, const Worker &wrk) {
-	return _details::WorkerFutureChain<Future<T> >(fut, wrk);
-}
-
-template<typename T>
-auto operator >> (const FutureExceptionalState<Future<T> > &fut, const Worker &wrk) {
-	return _details::WorkerFutureExceptionChain<Future<T> >(fut.getFuture(), wrk);
-}
-
 
 
 }

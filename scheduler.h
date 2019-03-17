@@ -147,6 +147,15 @@ public:
 				this->dispatcher = nullptr;
 		}
 
+
+		static bool dispatcher_pump_or_wait_until(Dispatcher &dispatcher, const TimePoint &tp) {
+			if (tp == TimePoint::max()) {
+				return dispatcher.pump();
+			} else {
+				return dispatcher.pump_or_wait_until(tp);
+			}
+		}
+
 		template<typename InitFn>
 		void worker(InitFn && initFn) {
 			Dispatcher dispatcher;
@@ -157,7 +166,7 @@ public:
 
 			TimePoint tp = Clock::now();
 			TimePoint nx = execAllRetired(queue,tp);
-			while (dispatcher.pump_or_wait_until(nx)) {
+			while (dispatcher_pump_or_wait_until(dispatcher, nx)) {
 				TimePoint tp = Clock::now();
 				nx = execAllRetired(queue, tp);
 			}
@@ -280,7 +289,7 @@ public:
 			typedef FutureFromType<decltype(std::declval<Fn>()())> FutFromType;
 			FutureWithID<typename FutFromType::type> fut;
 			fut.set_id(sch.impl->at(tp,[fut,fn=std::remove_reference_t<Fn>(fn)]() mutable {
-				FutFromType::callFnSetValue(fut,fn);
+				fut.set_result_of(fn);
 			}));
 			return fut;
 		}
@@ -427,6 +436,9 @@ public:
 	static void install(InitFn && init) {
 		(new BasicScheduler(BasicScheduler::installMode))->install(init);
 	}
+
+	///Returns true, if object is valid (i.e. has assigned scheduler object)
+	bool valid() const {return impl != nullptr;}
 
 protected:
 	RefCntPtr<AbstractScheduler<TimePoint> > impl;

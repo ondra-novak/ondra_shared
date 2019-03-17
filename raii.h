@@ -3,8 +3,10 @@
 
 namespace ondra_shared {
 
-///Declares type with automatick cleanup when variable of this type is destroyed
+///(deprecated) Declares type with automatick cleanup when variable of this type is destroyed
 /**
+ * Use Handle
+ *
  * @tparam Res type of resource
  * @tparam FnType type of cleanup function. You can use decltype(&cleanupFn)
  * @tparam fn existing function. The function must have external linkage

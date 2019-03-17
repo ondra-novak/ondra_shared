@@ -26,13 +26,10 @@ auto apply(Fnc &&fnc, const std::tuple<Types...> &tuple)
 	return apply_impl(std::forward<Fnc>(fnc), tuple, std::index_sequence_for<Types...>());
 }
 
-#define wrap_template_fn(fn) \
-    [&] (auto&&... args) -> decltype(auto) \
-    { return fn (std::forward<decltype(args)>(args)...); }
+
+
 }
 
 
-
-
-
 #endif /* ONDRA_SHARED_SRC_SHARED_APPLY_H_464604698 */
+
