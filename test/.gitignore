@@ -5,3 +5,4 @@
 /worker
 /scheduler
 /scheduler_1thread
+/shared_function

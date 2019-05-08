@@ -4,7 +4,7 @@
 #CXXFLAGS=-std=c++14 -Wall -Werror -O3 -Wno-noexcept-type
 CXXFLAGS=-std=c++14 -Wall -Werror -O0 -ggdb -Wno-noexcept-type
 
-all: worker scheduler apply scheduler_1thread future_test defer linear_map
+all: worker scheduler apply scheduler_1thread future_test defer shared_function linear_map
 clean:
 	rm -f worker
 	rm -f scheduler
@@ -15,6 +15,7 @@ clean:
 	rm -f future_test
 	rm -f defer
 	rm -f linear_map
+	rm -f shared_function
 
 -include worker.deps
 worker : worker.cpp 
@@ -44,4 +45,8 @@ defer : defer.cpp
 -include linear_map.deps
 linear_map : linear_map.cpp 
 	g++ $(CXXFLAGS) -o linear_map linear_map.cpp -MMD -MF linear_map.deps -MT linear_map 
+
+-include shared_function.deps
+shared_function : shared_function.cpp 
+	g++ $(CXXFLAGS) -o shared_function shared_function.cpp -MMD -MF shared_function.deps -MT shared_function -lpthread  
 
