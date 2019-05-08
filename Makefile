@@ -1,0 +1,5 @@
+
+$(MAKECMDGOALS):
+	cd test; $(MAKE) $(MAKECMDGOALS)
+	
+	

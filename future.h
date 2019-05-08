@@ -105,6 +105,13 @@ public:
 	 */
 	void reject(const std::exception_ptr &exception);
 
+	///Sets the future into rejected state using current exception
+	/**
+	 * You can only call this function inside of the exception handler (catch). Function
+	 * captures the exception and uses it to reject future
+	 *
+	 * If called outside of catch handler, RejectedFutureException is used
+	 */
 	void reject();
 
 	///Resolves future using other future
@@ -147,10 +154,20 @@ public:
 	 * @param fn function to execute
 	 * @param exceptFn function to execute when future is rejected
 	 * @retval true the future is already resolved
-	 * @retval false the future is nor resolved, the function is scheduled
+	 * @retval false the future is not resolved, the function is scheduled
 	 */
 	template<typename Fn, typename ExceptFn> bool await(Fn &&fn, ExceptFn &&exceptFn);
 
+	///Asynchronous waiting
+	/** Schedules function for exception after the future is resolved
+	 *
+	 * @param exceptFn function to execute when future is rejected
+	 * @retval true the future is already resolved
+	 * @retval false the future is not resolved, the function is schedled
+	 *
+	 * @note If the future is resolved with a valid result the function is not caled, it is only
+	 * removed
+	 */
 	template<typename ExceptFn> bool await_catch(ExceptFn &&exceptFn);
 
 	template<typename Fn> bool then(Fn &&fn);
@@ -702,14 +719,6 @@ inline bool FutureValue<T>::addHandler(AbstractWatchHandler *h) {
 
 	AbstractWatchHandler *expected;
 	do {
-		//check is resolved state, which is atomic.
-		//if (is_resolved()) {
-			//in case, that future is already resolved, do not call the handler
-			//instead release it
-			//h->release();
-			//and returns "already resolved state"
-			//return true;
-		//}
 		//initialize expected variable, variable contains expected top handler
 		expected = watchChain.load(std::memory_order_acquire);
 		//initialize next pointer
@@ -749,7 +758,7 @@ inline std::shared_ptr<FutureWaitableEvent> FutureValue<T>::create_waitable_even
 		ev->signal();
 	};
 
-	then(fn,fn);
+	finally(fn);
 
 	return ev;
 
