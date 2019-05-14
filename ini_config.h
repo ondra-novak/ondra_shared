@@ -17,6 +17,7 @@
 #include "ini_parser.h"
 
 #include "stringpool.h"
+#include "virtualMember.h"
 
 namespace ondra_shared {
 

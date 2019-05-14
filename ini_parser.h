@@ -1,6 +1,8 @@
 #ifndef _ONDRA_SHARED_INI_PARSER_23123148209810_
 #define _ONDRA_SHARED_INI_PARSER_23123148209810_
 
+#include "stringview.h"
+
 namespace ondra_shared {
 
 
