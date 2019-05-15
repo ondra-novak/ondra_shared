@@ -361,7 +361,10 @@ inline void IniConfig::load(const IniItem& item) {
 	String k = pool.add(item.key);
 	String v = pool.add(item.value);
 	Value vv = createValue(v);
-	kv->insert(std::make_pair(k,vv));
+	auto z = kv->insert(std::make_pair(k,vv));
+	if (!z.second) {
+		z.first->second = vv;
+	}
 }
 
 inline std::string IniConfig::Value::getPath(std::string&& default_path) const {
