@@ -158,8 +158,9 @@ std::pair<typename linear_set<T, Less>::iterator, bool>
 
 	auto f = find_exists(value);
 	if (f.second) return f;
+	auto dist = f.first - data.begin();
 	data.insert(f.first, std::move(value));
-	return f;
+	return std::make_pair(data.begin()+dist,true);
 }
 
 template<typename T, typename Less>

@@ -144,7 +144,7 @@ public:
 
 	Value &operator[](const Key &key) {
 		auto z = insert(value_type(key, Value()));
-		return *z.first;
+		return z.first->second;
 	}
 
 	void reserve(std::size_t sz) {
