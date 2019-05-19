@@ -284,32 +284,32 @@ bool linear_set<T, Less>::contains( const K& x ) const {
 template<typename T, typename Less>
 template< class K >
 std::pair<typename linear_set<T, Less>::iterator,typename linear_set<T, Less>::iterator> linear_set<T, Less>::equal_range( const K& x ) {
-	return std::equal_range<iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::equal_range<iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 template<typename T, typename Less>
 template< class K >
 std::pair<typename linear_set<T, Less>::const_iterator,typename linear_set<T, Less>::const_iterator> linear_set<T, Less>::equal_range( const K& x ) const {
-	return std::equal_range<const_iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::equal_range<const_iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 template<typename T, typename Less>
 template< class K >
 typename linear_set<T, Less>::iterator linear_set<T, Less>::lower_bound(const K& x) {
-	return std::lower_bound<iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::lower_bound<iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 template<typename T, typename Less>
 template< class K >
 typename linear_set<T, Less>::const_iterator linear_set<T, Less>::lower_bound(const K& x) const {
-	return std::lower_bound<const_iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::lower_bound<const_iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 template<typename T, typename Less>
 template< class K >
 typename linear_set<T, Less>::iterator linear_set<T, Less>::upper_bound(const K& x) {
-	return std::upper_bound<iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::upper_bound<iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 template<typename T, typename Less>
 template< class K >
 typename linear_set<T, Less>::const_iterator linear_set<T, Less>::upper_bound(const K& x) const {
-	return std::upper_bound<const_iterator, const K &, Less &>(data.begin(), data.end(), x, less);
+	return std::upper_bound<const_iterator, const K &, const Less &>(data.begin(), data.end(), x, less);
 }
 
 template<typename T, typename Less>
@@ -364,7 +364,7 @@ linear_set<T, Less>::linear_set( const linear_set& other )
 :data(other.data),less(other.less) {}
 
 template<typename T, typename Less>
-linear_set<T, Less>::linear_set(linear_set&& other ) {
+linear_set<T, Less>::linear_set(linear_set&& other ):less(std::move(other.less)) {
 	swap(other);
 }
 

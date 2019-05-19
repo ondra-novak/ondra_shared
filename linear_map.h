@@ -26,7 +26,7 @@ public:
 		Less less;
 		Compare(const Less &less):less(less) {}
 		template<typename A, typename B, typename C, typename D>
-		bool operator()(const std::pair<A,B> &a, const std::pair<C,D> &b) {
+		bool operator()(const std::pair<A,B> &a, const std::pair<C,D> &b) const {
 			return less(a.first, b.first);
 		}
 	};
@@ -139,7 +139,7 @@ public:
 	const Value &at(const Key &key) const {
 		auto f = find(key);
 		if (f == cend()) throw std::out_of_range("Key not found");
-		else return *f;
+		else return (*f).second;
 	}
 
 	Value &operator[](const Key &key) {
