@@ -15,9 +15,10 @@ namespace ondra_shared {
 template<typename Key, typename Value, typename Less = std::less<Key> >
 class linear_map {
 
-	class SrchKey: public std::pair<const Key &, bool> {
+	template<typename K>
+	class SrchKey: public std::pair<const K &, bool> {
 	public:
-		SrchKey(const Key &k):std::pair<const Key &, bool>(k,false) {}
+		SrchKey(const K &k):std::pair<const K &, bool>(k,false) {}
 	};
 
 public:
@@ -82,34 +83,34 @@ public:
 	size_type max_size() const noexcept {return dset.max_size();}
 
 	template< class K > size_type count( const K& key ) const {
-		return dset.count(SrchKey(key));
+		return dset.count(SrchKey<K>(key));
 	}
 	template< class K > iterator find( const K& key ) {
-		return dset.find(SrchKey(key));
+		return dset.find(SrchKey<K>(key));
 	}
 	template< class K > const_iterator find( const K& key ) const {
-		return dset.find(SrchKey(key));
+		return dset.find(SrchKey<K>(key));
 	}
 	template< class K > bool contains( const K& key ) const {
-		return dset.contains(SrchKey(key));
+		return dset.contains(SrchKey<K>(key));
 	}
 	template< class K > std::pair<iterator,iterator> equal_range( const K& key ) {
-		return dset.equal_range(SrchKey(key));
+		return dset.equal_range(SrchKey<K>(key));
 	}
 	template< class K > std::pair<const_iterator,const_iterator> equal_range( const K& key ) const {
-		return dset.equal_range(SrchKey(key));
+		return dset.equal_range(SrchKey<K>(key));
 	}
 	template< class K > iterator lower_bound(const K& key) {
-		return dset.lower_bound(SrchKey(key));
+		return dset.lower_bound(SrchKey<K>(key));
 	}
 	template< class K > const_iterator lower_bound(const K& key) const {
-		return dset.lower_bound(SrchKey(key));
+		return dset.lower_bound(SrchKey<K>(key));
 	}
 	template< class K > iterator upper_bound(const K& key) {
-		return dset.upper_bound(SrchKey(key));
+		return dset.upper_bound(SrchKey<K>(key));
 	}
 	template< class K > const_iterator upper_bound(const K& key) const {
-		return dset.upper_bound(SrchKey(key));
+		return dset.upper_bound(SrchKey<K>(key));
 	}
 
 	key_compare key_comp() const {return dset.value_comp().less;}
@@ -125,10 +126,14 @@ public:
 		:dset(std::move(other.dset)) {}
 	linear_map( std::initializer_list<value_type> init, const Less& comp = Less())
 		:dset(init,Compare(comp)) {}
+	explicit linear_map(std::vector<value_type>&& other, const Less& comp = Less() )
+			:dset(std::move(other), Compare(comp)) {}
 
 
 	iterator begin() {return dset.begin();}
 	iterator end() {return dset.end();}
+	const_iterator begin() const {return dset.cbegin();}
+	const_iterator end() const {return dset.cend();}
 	const_iterator cbegin() const {return dset.cbegin();}
 	const_iterator cend() const {return dset.cend();}
 	reverse_iterator rbegin() {return dset.rbegin();}

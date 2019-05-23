@@ -87,6 +87,8 @@ public:
 	linear_set( const linear_set& other );
 	linear_set(linear_set&& other );
 	linear_set( std::initializer_list<value_type> init, const Less& comp = Less());
+	explicit linear_set(std::vector<T>&& other , const Less& comp = Less());
+
 
 	iterator begin();
 	iterator end();
@@ -373,7 +375,11 @@ linear_set<T, Less>::linear_set( std::initializer_list<value_type> init, const L
 	:linear_set(init.begin(), init.end(), less)
 {}
 
-
+template<typename T, typename Less>
+linear_set<T, Less>::linear_set(std::vector<T>&& other, const Less& comp)
+:data(std::move(other)), less(comp) {
+	std::sort<iterator, Less &>(data.begin(),data.end(),less);
+}
 }
 
 #endif /* ONDRA_SHARED_LINEAR_SET_H_87986548794654 */
