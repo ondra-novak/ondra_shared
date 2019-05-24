@@ -80,6 +80,14 @@ public:
 
 	};
 
+	class ConfigLoadError: public std::exception {
+	public:
+		ConfigLoadError(const std::string &msg):msg("Failed to load config: "+msg) {}
+		const char *what() const throw() {return msg.c_str();}
+	protected:
+		std::string msg;
+	};
+
 	class KeyValueMap: public std::map<String, Value> {
 	public:
 		class Mandatory:public VirtualMember<KeyValueMap> {
@@ -131,12 +139,19 @@ public:
 
 
 	template<typename Fn, typename D>
-	void load(const Fn &fn, const StrViewA &path, const D &directives, const StrViewA &curSection);
+	void load(const Fn &fn, const StrViewA &path, D &&directives, const StrViewA &curSection);
 
 	template<typename D>
-	bool load(const std::string &pathname, const D &directives, const StrViewA &curSection = StrViewA());
+	bool load(const std::string &pathname,  D &&directives, const StrViewA &curSection = StrViewA());
+
+	///Loads config but using reference path to interpret relative paths in the config
+	template<typename D>
+	bool load_setpath(const std::string &pathname, const StrViewA &refpath,  D &&directives, const StrViewA &curSection = StrViewA());
 
 	void load(const std::string &pathname);
+
+	///Loads config but using reference path to interpret relative paths in the config
+	void load_setpath(const std::string &pathname, const StrViewA &refpath);
 
 	Value createValue(const String &value);
 
@@ -170,6 +185,8 @@ protected:
 	KeyValueMap emptyMap;
 	String curPath;
 
+
+	KeyValueMap &loadSection(StrViewA section);
 };
 
 
@@ -202,7 +219,7 @@ inline IniConfig::SectionMap::const_iterator IniConfig::end() const {
 }
 
 template<typename Fn, typename D>
-inline void IniConfig::load(const Fn &fn, const StrViewA &path, const D &directives, const StrViewA &curSection) {
+inline void IniConfig::load(const Fn &fn, const StrViewA &path, D &&directives, const StrViewA &curSection) {
 
 	String prevPath = curPath;
 	auto f1 = finally([&]{curPath = prevPath;});
@@ -217,7 +234,7 @@ inline void IniConfig::load(const Fn &fn, const StrViewA &path, const D &directi
 	class ProcessFn {
 	public:
 		IniConfig &owner;
-		const D &directives;
+		D &&directives;
 		StrViewA curSection;
 
 		void operator()(const IniItem &item) const {
@@ -231,12 +248,12 @@ inline void IniConfig::load(const Fn &fn, const StrViewA &path, const D &directi
 			}
 		}
 
-		ProcessFn(IniConfig &owner, const D &directives, const StrViewA &curSection)
-			:owner(owner),directives(directives),curSection(curSection) {}
+		ProcessFn(IniConfig &owner, D &&directives, const StrViewA &curSection)
+			:owner(owner),directives(std::forward<D>(directives)),curSection(curSection) {}
 	};
 
-	ProcessFn processFn(*this, directives, curSection);
-	IniParser<ProcessFn> parse(processFn);
+	ProcessFn processFn(*this,std::forward<D>(directives), curSection);
+	IniParser<ProcessFn &&> parse(std::move(processFn));
 
 	int i = fn();
 	while (i != -1) {
@@ -247,16 +264,27 @@ inline void IniConfig::load(const Fn &fn, const StrViewA &path, const D &directi
 }
 
 template<typename D>
-inline bool IniConfig::load(const std::string& pathname,const D& directives, const StrViewA &curSection) {
+inline bool IniConfig::load(const std::string& pathname,D&& directives, const StrViewA &curSection) {
+	return load_setpath(pathname, pathname, std::forward<D>(directives), curSection);
+}
+
+template<typename D>
+inline bool IniConfig::load_setpath(const std::string& pathname, const StrViewA &path, D&& directives, const StrViewA &curSection) {
 
 
 	std::ifstream input(pathname);
 	if (!input) return false;
 
-	auto mydirect = [this, directives](const IniItem &item) {
+	auto mydirect = [this, directives = std::forward<D>(directives)](const IniItem &item) mutable {
 		if (item.key == "include") {
 			Value v(createValue(item.value));
 			if (this->load(v.getPath(),directives, item.section)) return;
+		}
+		if (item.key == "template") {
+			auto& sec = operator[](item.value);
+			KeyValueMap &kv = loadSection(item.section);
+			kv.insert(sec.begin(), sec.end());
+			return;
 		}
 		directives(item);
 	};
@@ -265,13 +293,28 @@ inline bool IniConfig::load(const std::string& pathname,const D& directives, con
 		return input.get();
 	};
 
-	load(reader, pathname, mydirect, curSection);
+	load(reader, path, std::move(mydirect), curSection);
 	return true;
+}
+
+inline void IniConfig::load_setpath(const std::string& pathname, const StrViewA &path) {
+	if (!load_setpath(pathname, path, [](const IniItem &itm){
+		std::string msg;
+		msg.append("[")
+				.append(itm.section.data, itm.section.length)
+				.append("] @")
+				.append(itm.key.data, itm.key.length)
+				.append(" ")
+				.append(itm.value.data, itm.value.length);
+		throw ConfigLoadError(msg);
+	} )) {
+		throw ConfigLoadError(pathname);
+	}
 }
 
 
 inline void IniConfig::load(const std::string& pathname) {
-	load(pathname, [](const IniItem &){} );
+	load_setpath(pathname, pathname);
 }
 
 template<typename T>
@@ -350,18 +393,24 @@ inline IniConfig::Value IniConfig::createValue(const String &value) {
 	vv.v = value;
 	return vv;
 }
-inline void IniConfig::load(const IniItem& item) {
-	auto s = smap.find(item.section);
+
+inline IniConfig::KeyValueMap &IniConfig::loadSection(StrViewA section) {
+	auto s = smap.find(section);
 	KeyValueMap *kv;
 	if (s == smap.end()) {
-		String sname = pool.add(item.section);
+		String sname = pool.add(section);
 		s = smap.insert(std::make_pair(sname, KeyValueMap(sname))).first;
 	}
 	kv = &s->second;
+	return *kv;
+
+}
+inline void IniConfig::load(const IniItem& item) {
+	KeyValueMap &sect = loadSection(item.section);
 	String k = pool.add(item.key);
 	String v = pool.add(item.value);
 	Value vv = createValue(v);
-	auto z = kv->insert(std::make_pair(k,vv));
+	auto z = sect.insert(std::make_pair(k,vv));
 	if (!z.second) {
 		z.first->second = vv;
 	}

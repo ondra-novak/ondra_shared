@@ -103,13 +103,13 @@ class IniParser {
 public:
 
 
-	IniParser(const Output &out)
+	IniParser(Output &&out)
 		:buffer(1,0)
 		,sectionSize(1)
 		,keySize(0)
 		,valueSize(0)
 		,escapeChar('\\')
-		,fn(out)
+		,fn(std::forward<Output>(out))
 		,curState(beginLine) {}
 
 
