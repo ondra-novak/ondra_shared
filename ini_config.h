@@ -241,7 +241,7 @@ inline void IniConfig::load(const Fn &fn, const StrViewA &path, D &&directives, 
 			if (item.section.empty() && !curSection.empty()) {
 				IniItem newItem = item;
 				newItem.section = curSection;
-				operator()(item);
+				operator()(newItem);
 			} else {
 				if (item.type == IniItem::data)	owner.load(item);
 				else if (item.type == IniItem::directive) directives(item);
