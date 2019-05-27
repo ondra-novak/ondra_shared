@@ -440,6 +440,14 @@ public:
 	///Returns true, if object is valid (i.e. has assigned scheduler object)
 	bool valid() const {return impl != nullptr;}
 
+	///Synchronizes execution with the scheduler
+	/** useful to ensure,that operation has been removed and it is not executed right now */
+	void sync() {
+		Countdown ctn(1);
+		immediate() >> [&]{ctn.dec();};
+		ctn.wait();
+	}
+
 protected:
 	RefCntPtr<AbstractScheduler<TimePoint> > impl;
 

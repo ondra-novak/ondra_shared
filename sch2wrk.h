@@ -21,7 +21,9 @@ public:
 		sch.immediate() >> msg;
 	}
 	virtual void run() noexcept	{}
-	virtual void flush() noexcept {}
+	virtual void flush() noexcept {
+		sch.sync();
+	}
 
 
 protected:
