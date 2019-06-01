@@ -36,6 +36,8 @@ public:
 		Value(){}
 		Value(String v,String p):v(v),p(p) {}
 		std::string getPath() const;
+		///retrieves current path for this value
+		StrViewA getCurPath() const;
 		std::size_t getUInt() const;
 		std::intptr_t getInt() const;
 		bool getBool() const;
@@ -44,6 +46,7 @@ public:
 		const char *c_str() const {return v.getView().data;}
 
 		std::string getPath(std::string &&default_path) const;
+		StrViewA getCurPath(StrViewA defval) const;
 		std::size_t getUInt(std::size_t default_value) const;
 		bool getBool(bool default_value) const;
 		std::intptr_t getInt(std::size_t default_value) const;
@@ -200,6 +203,9 @@ inline std::string IniConfig::Value::getPath() const {
 	return s;
 }
 
+inline StrViewA IniConfig::Value::getCurPath() const {
+	return p;
+}
 inline const IniConfig::KeyValueMap& IniConfig::operator [](const StrViewA& sectionName) const {
 	auto itr = smap.find(sectionName);
 	if (itr == smap.end()) {
@@ -419,6 +425,11 @@ inline void IniConfig::load(const IniItem& item) {
 inline std::string IniConfig::Value::getPath(std::string&& default_path) const {
 	if (defined()) return getPath();
 	else return std::move(default_path);
+}
+
+inline StrViewA IniConfig::Value::getCurPath(StrViewA default_path) const {
+	if (defined()) return getCurPath();
+	else return default_path;
 }
 
 inline std::size_t IniConfig::Value::getUInt(std::size_t default_value) const {
