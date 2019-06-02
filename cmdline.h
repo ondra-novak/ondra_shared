@@ -25,7 +25,7 @@ public:
 		initNextArg();
 	}
 
-	std::string getProgramFullPath() const;
+	std::experimental::filesystem::path getProgramFullPath() const;
 
 
 	///Returns true, if no more arguments reached.
@@ -115,7 +115,7 @@ inline CmdArgIter parseCmdLine(int argc, char **argv) {
 	return CmdArgIter(argv[0],argc-1, argv+1);
 }
 
-inline std::string CmdArgIter::getProgramFullPath() const {
+inline std::experimental::filesystem::path CmdArgIter::getProgramFullPath() const {
 	using namespace std::experimental::filesystem;
 	if (arg0[0] == '/') return arg0;
 	auto p = current_path();

@@ -204,7 +204,7 @@ inline std::string IniConfig::Value::getPath() const {
 }
 
 inline StrViewA IniConfig::Value::getCurPath() const {
-	return p;
+	return StrViewA(p).substr(0,p.getLength()-1);
 }
 inline const IniConfig::KeyValueMap& IniConfig::operator [](const StrViewA& sectionName) const {
 	auto itr = smap.find(sectionName);
