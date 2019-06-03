@@ -39,6 +39,8 @@ public:
 		return lev >= enabledLevel;
 	}
 
+
+
 protected:
 	std::mutex lock;
 	LogLevel enabledLevel;

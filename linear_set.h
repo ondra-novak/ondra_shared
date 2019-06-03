@@ -59,7 +59,8 @@ public:
 	iterator erase( iterator pos );
 	iterator erase( const_iterator pos );
 	iterator erase( const_iterator first, const_iterator last );
-	size_type erase( const key_type& key );
+	template<typename K>
+	size_type erase( const K& key );
 	void swap( linear_set& other ) noexcept;
 
 	bool empty() const noexcept {return data.empty();}
@@ -218,6 +219,7 @@ std::pair<typename linear_set<T, Less>::iterator,bool> linear_set<T, Less>::empl
 	return insert(T(std::forward<Args>(args)...));
 }
 
+
 template<typename T, typename Less>
 typename linear_set<T, Less>::iterator linear_set<T, Less>::erase(iterator pos) {
 	return data.erase(pos);
@@ -235,7 +237,8 @@ typename linear_set<T, Less>::iterator linear_set<T, Less>::erase(const_iterator
 }
 
 template<typename T, typename Less>
-typename linear_set<T, Less>::size_type linear_set<T, Less>::erase(const key_type& key) {
+template<typename K>
+typename linear_set<T, Less>::size_type linear_set<T, Less>::erase(const K& key) {
 	auto f = lower_bound(key);
 	if (f != end() && !less(key, *f)) {
 		erase(f);

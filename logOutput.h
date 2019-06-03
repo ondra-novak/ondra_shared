@@ -68,9 +68,6 @@ public:
 	 */
 	virtual void setDefault();
 
-	///Notifies the log provider (factory) about log-rotate event and requests to reopen log files
-	virtual void reopenLogs() {}
-
 	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
 
 	virtual ~AbstractLogProviderFactory() {}
@@ -161,6 +158,19 @@ public:
 	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
 
 	virtual ~AbstractLogProvider() {}
+
+	static int rotate(bool check = false) {
+		static std::atomic_int logrotate_counter (0);
+		if (!check) return ++logrotate_counter;
+		else return logrotate_counter;
+	}
+
+	static bool rotated(int &counter) {
+		int val = rotate(true);
+		bool res = counter != val;
+		counter = val;
+		return res;
+	}
 };
 
 
@@ -631,6 +641,10 @@ class LogObjectT {
 		}
 	}
 
+	//Ensures that soon or later logs will be reopened
+	inline void logRotate() {
+		AbstractLogProvider::rotate();
+	}
 
 }
 

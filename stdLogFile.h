@@ -19,19 +19,15 @@ public:
 	 * @param pathname the pathname to the log file. It is hightly recommended
 	 * to specify full pathname (relative pathaname is not advised).
 	 * @param minLevel sets minimum allowed log level (default info)
-	 * @param autorotate_count specifies count of rotates before the log is erased.
-	 *
-	 * @param autorotate_compress
 	 */
 	StdLogFile(StrViewA pathname,
-			LogLevel minLevel = LogLevel::info,
-			unsigned int autorotate_count = 0,
-			StrViewA autorotate_compress = StrViewA())
+			LogLevel minLevel = LogLevel::info)
 		:StdLogProviderFactory( minLevel)
 		,pathname(pathname)
 		,outfile(this->pathname,std::ios::app)
-		,autorotate_count(autorotate_count)
-		,autorotate_compress(autorotate_compress){
+		,autorotate_count(0)
+		{
+		AbstractLogProvider::rotated(autorotate_count);
 	}
 
 	bool operator! () const {
@@ -53,6 +49,12 @@ public:
 	}
 
 	virtual void writeToLog(const StrViewA &line, const std::time_t &) override {
+		if (AbstractLogProvider::rotated(autorotate_count)) {
+			outfile << "Log rotated..." <<std::endl;
+			reopenLog();
+			outfile << "Continues..." <<std::endl;
+
+		}
 		outfile << line << std::endl;
 	}
 
@@ -85,9 +87,7 @@ protected:
 
 	std::string pathname;
 	std::ofstream outfile;
-	unsigned int autorotate_count;
-	std::string autorotate_compress;
-	std::time_t nextLogRotateTime;
+	int autorotate_count;
 
 
 
