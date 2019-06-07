@@ -42,7 +42,9 @@ public:
 	using key_compare = Less;
 	using value_compare = Compare;
 
-	void clear();
+	void clear() {
+		return dset.clear();
+	}
 
 	std::pair<iterator,bool> insert( const value_type& value ) {
 		return dset.insert(value);
