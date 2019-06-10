@@ -143,13 +143,15 @@ public:
 	const_reverse_iterator crbegin() const {return dset.crbegin();}
 	const_reverse_iterator crend() const {return dset.crend();}
 
-	const Value &at(const Key &key) const {
+	template< class K >
+	const Value &at(const K &key) const {
 		auto f = find(key);
 		if (f == cend()) throw std::out_of_range("Key not found");
 		else return (*f).second;
 	}
 
-	Value &operator[](const Key &key) {
+	template< class K >
+	Value &operator[](const K &key) {
 		auto z = insert(value_type(key, Value()));
 		return z.first->second;
 	}
