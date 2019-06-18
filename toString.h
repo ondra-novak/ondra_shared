@@ -56,7 +56,7 @@ void floatToString(Number value, const Fn &fn, int maxPrecisionDigits=8) {
 		//0.001248 -> 3 (1.248e-3)
 		double fexp = floor(log10(fabs(value)));
 
-		if (!isfinite(fexp)) {
+		if (!std::isfinite(fexp)) {
 			if (fexp < 0) {
 				fn('0');
 			} else {
