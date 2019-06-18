@@ -21,13 +21,13 @@ public:
 
 	virtual PLogProvider create() override;
 
-	virtual void writeToLog(const StrViewA &line, const std::time_t &) {
+	virtual void writeToLog(const StrViewA &line, const std::time_t &, LogLevel ) {
 		std::cerr << line << std::endl;
 	}
 
-	void sendToLog(const StrViewA &line, const std::time_t &time) {
+	void sendToLog(const StrViewA &line, const std::time_t &time, LogLevel level) {
 		std::lock_guard<std::mutex> _(lock);
-		writeToLog(line, time);
+		writeToLog(line, time, level);
 	}
 
 
@@ -75,6 +75,7 @@ protected:
 	std::string ident;
 	PFactory shared;
 	time_t lastTime;
+	LogLevel curLevel;
 
 
 	void finishBuffer(const MutableStrViewA &b);
@@ -104,6 +105,7 @@ inline bool StdLogProvider::start(LogLevel level, MutableStrViewA& b) {
 		static thread_local unsigned int curThreadId = ++threadCounter;
 
 
+		curLevel = level;
 		buffer.clear();
 
 		auto wrfn = [&](char c) { buffer.push_back(c);};
@@ -116,7 +118,7 @@ inline bool StdLogProvider::start(LogLevel level, MutableStrViewA& b) {
 
 		unsignedToString(tinfo.tm_year+1900, wrfn, 10,4);
 		buffer.push_back('-');
-		unsignedToString(tinfo.tm_mon, wrfn, 10,2);
+		unsignedToString(tinfo.tm_mon+1, wrfn, 10,2);
 		buffer.push_back('-');
 		unsignedToString(tinfo.tm_mday, wrfn, 10,2);
 		buffer.push_back(' ');
@@ -159,7 +161,7 @@ inline void StdLogProvider::sendBuffer(MutableStrViewA& text) {
 
 inline void StdLogProvider::commit(const MutableStrViewA& text) {
 	finishBuffer(text);
-	shared->sendToLog(StrViewA(buffer.data(), buffer.size()), lastTime);
+	shared->sendToLog(StrViewA(buffer.data(), buffer.size()), lastTime, curLevel);
 	buffer.clear();
 }
 

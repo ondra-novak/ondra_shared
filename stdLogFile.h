@@ -48,7 +48,7 @@ public:
 		outfile.open(pathname, std::ios::app);
 	}
 
-	virtual void writeToLog(const StrViewA &line, const std::time_t &) override {
+	virtual void writeToLog(const StrViewA &line, const std::time_t &, LogLevel) override {
 		if (AbstractLogProvider::rotated(autorotate_count)) {
 			outfile << "Log rotated..." <<std::endl;
 			reopenLog();
