@@ -646,6 +646,25 @@ class LogObjectT {
 		AbstractLogProvider::rotate();
 	}
 
+	class NullLogProvider: public AbstractLogProvider {
+	public:
+		virtual bool start(LogLevel , MutableStrViewA &) {return false;}
+		virtual void sendBuffer(MutableStrViewA &){}
+		virtual void commit(const MutableStrViewA &){}
+		virtual PLogProvider newSection(const StrViewA &) {return std::make_unique<NullLogProvider>();}
+		virtual void setProgress(float , int ) {}
+		virtual bool isLogLevelEnabled(LogLevel) const {return false;}
+
+	};
+
+	class NullLogProviderFactory: public AbstractLogProviderFactory {
+	public:
+		virtual PLogProvider create() {return std::make_unique<NullLogProvider>();}
+		virtual bool isLogLevelEnabled(LogLevel ) const  {return false;}
+
+	};
+
+
 }
 
 
