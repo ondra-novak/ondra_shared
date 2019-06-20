@@ -21,8 +21,8 @@ public:
 		return cur == end;
 	}
 
-	auto &&operator()() {
-		auto &&ret = *cur;
+	auto operator()() {
+		auto ret = *cur;
 		++cur;
 		return ret;
 	}
