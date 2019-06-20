@@ -45,7 +45,7 @@ void floatToString(Number value, const Fn &fn, int maxPrecisionDigits=8) {
 				100000000, //8
  				1000000000 //9
 		};
-	const char *inf = "Inf";
+	const char *inf = "∞";
 
 		bool sign = value < 0;
 		std::uintptr_t precisz = std::min<std::uintptr_t>(maxPrecisionDigits, 9);
