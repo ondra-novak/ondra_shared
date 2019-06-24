@@ -90,6 +90,17 @@ public:
 	linear_set( std::initializer_list<value_type> init, const Less& comp = Less());
 	explicit linear_set(std::vector<T>&& other , const Less& comp = Less());
 
+	linear_set &operator=(const linear_set & other) {
+		data = other.data;
+		less = other.less;
+		return *this;
+	}
+	linear_set &operator=(linear_set && other) {
+		data = std::move(other.data);
+		less = std::move(other.less);
+		return *this;
+	}
+
 
 	iterator begin();
 	iterator end();

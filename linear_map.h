@@ -131,6 +131,14 @@ public:
 	explicit linear_map(std::vector<value_type>&& other, const Less& comp = Less() )
 			:dset(std::move(other), Compare(comp)) {}
 
+	linear_map &operator=(const linear_map & other) {
+		dset = other.dset;
+		return *this;
+	}
+	linear_map &operator=(linear_map && other) {
+		dset = std::move(other.dset);
+		return *this;
+	}
 
 	iterator begin() {return dset.begin();}
 	iterator end() {return dset.end();}
