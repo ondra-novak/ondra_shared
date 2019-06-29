@@ -369,7 +369,7 @@ inline bool IniConfig::Value::getBool() const {
 		}
 	};
 
-	constexpr StrViewA yes_forms[] = {"true","1","yes","y"};
+	constexpr StrViewA yes_forms[] = {"true","1","yes","y","on"};
 	auto sv = getString();
 	for (auto && x: yes_forms) {
 		if (cmpstr(sv,x)) return true;
