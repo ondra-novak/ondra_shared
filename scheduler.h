@@ -182,7 +182,7 @@ public:
 		virtual std::size_t at(const TimePoint &tp, const Msg &msg) override {
 			std::size_t id = ++idcounter;
 			SchQueue *q = queue;
-			dispatcher->dispatch([id, itm = ScheduledItem(tp,Duration::zero(),msg,id),q]{
+			dispatcher->dispatch([itm = ScheduledItem(tp,Duration::zero(),msg,id),q]{
 				q->push(itm);
 			});
 			return id;
@@ -192,7 +192,7 @@ public:
 			std::size_t id = ++idcounter;
 			TimePoint tp = Clock::now()+dur;
 			SchQueue *q = queue;
-			dispatcher->dispatch([id, itm = ScheduledItem(tp,dur,msg,id),q]{
+			dispatcher->dispatch([itm = ScheduledItem(tp,dur,msg,id),q]{
 				q->push(itm);
 			});
 			return id;

@@ -180,7 +180,7 @@ public:
 		}
 	}
 
-	virtual void defer_call_impl(IDeferFunction *fn) {
+	virtual void defer_call_impl(IDeferFunction *fn) override {
 		fn->next = top;
 		top = fn;
 	}

@@ -126,7 +126,7 @@ public:
 	class DefaultWorker: public AbstractWorker {
 	public:
 
-		virtual void dispatch(const Msg &msg)	{
+		virtual void dispatch(const Msg &msg) override	{
 			d->dispatch(msg);
 		}
 

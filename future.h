@@ -244,14 +244,14 @@ protected:
 	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(t),void()) {
 		defer >> [t=T(t),fn=Fn(fn)]() mutable {fn(t);};
 	}
-	template<typename Fn> static auto callCb(Fn &&fn, const T &t) -> decltype(fn(),void()) {
+	template<typename Fn> static auto callCb(Fn &&fn, const T &) -> decltype(fn(),void()) {
 		defer >> fn;
 	}
 	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(t),void()) {
 		defer >> [t=std::exception_ptr(t),fn=Fn(fn)]() mutable {fn(t);};
 		fn(t);
 	}
-	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &t) -> decltype(fn(),void()) {
+	template<typename Fn> static auto callCbExcept(Fn &&fn, const std::exception_ptr &) -> decltype(fn(),void()) {
 		defer >> fn;
 		fn();
 	}
@@ -889,7 +889,9 @@ FutureExceptionalState<Future<T> > Future<T>::operator !() {
 template<typename T> Future<T>::Future() {
 	v = std::make_shared<FutureValue<T> >();
 }
-template<typename T> Future<T>::Future(nullptr_t) {}
+template<typename T>
+Future<T>::Future(std::nullptr_t) {}
+
 template<typename T> Future<T> Future<T>::resolve(const T &val) {
 	Future f;
 	f.set(val);
