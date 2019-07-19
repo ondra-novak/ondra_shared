@@ -13,8 +13,8 @@ namespace ondra_shared {
 template<typename T>
 class StringPoolTraits {
 public:
-	static inline void putEnd(std::vector<T> &buffer) {}
-	static inline const T *empty(std::vector<T> &buffer) {return nullptr;}
+	static inline void putEnd(std::vector<T> &) {}
+	static inline const T *empty(std::vector<T> &) {return nullptr;}
 };
 
 template<>
