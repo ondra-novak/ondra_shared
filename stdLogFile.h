@@ -56,6 +56,7 @@ public:
 
 		}
 		outfile << line << std::endl;
+		outfile.flush();
 	}
 
 
