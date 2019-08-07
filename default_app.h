@@ -55,7 +55,11 @@ public:
 				Switch{'h',"help",[&](CmdArgIter&){this->showHelp(*ptr_default_switches);exit(0);},"show this help"},
 				Switch{'d',"debug",[&](CmdArgIter&){debug=true;},"enable debug"},
 				Switch{'v',"verbose",[&](CmdArgIter&){verbose=true;},"verbose mode"},
-				Switch{'f',"config",[&](CmdArgIter&args){configPath=args.getNext();},"<config_file> specify path to configuration file"}
+				Switch{'f',"config",[&](CmdArgIter&args){
+					configPath=args.getNext();
+					if (configPath.is_relative())
+						configPath = std::experimental::filesystem::current_path() / configPath;
+				},"<config_file> specify path to configuration file"}
 		};
 		ptr_default_switches = &default_switches;
 

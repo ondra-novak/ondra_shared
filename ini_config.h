@@ -161,11 +161,6 @@ public:
 	void load(const IniItem &item);
 
 	IniConfig():emptyMap(StrViewA()) {}
-	IniConfig(const IniConfig &other);
-	IniConfig(IniConfig &&other);
-
-	IniConfig &operator=(const IniConfig &other);
-	IniConfig &operator=(IniConfig &&other);
 
 
 #ifdef _WIN32
