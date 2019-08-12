@@ -5,7 +5,7 @@
 #include "cmdline.h"
 #include "ini_config.h"
 #include "linear_map.h"
-#include "stdLogOutput.h"
+#include "stdLogFile.h"
 
 namespace ondra_shared {
 
