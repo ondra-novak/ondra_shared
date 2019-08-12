@@ -392,7 +392,7 @@ linear_set<T, Less>::linear_set( std::initializer_list<value_type> init, const L
 template<typename T, typename Less>
 linear_set<T, Less>::linear_set(std::vector<T>&& other, const Less& comp)
 :data(std::move(other)), less(comp) {
-	std::sort<iterator, Less &>(data.begin(),data.end(),comp);
+	std::sort<iterator,const Less &>(data.begin(),data.end(),comp);
 }
 }
 
