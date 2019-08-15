@@ -100,6 +100,14 @@ public:
 		signal(sig, &handler);
 	}
 
+	///Install to all crashing signals
+	void install() {
+		install(SIGSEGV);
+		install(SIGBUS);
+		install(SIGILL);
+		install(SIGABRT);
+	}
+
 };
 
 
