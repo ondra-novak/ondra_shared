@@ -128,9 +128,19 @@ public:
 		queue.push(msg);
 	}
 
+	///Dispatch the function
+	void dispatch(Msg &&msg) {
+		queue.push(std::move(msg));
+	}
+
 	///dispatch function
 	void operator<<(const Msg &msg) {
 		queue.push(msg);
+	}
+
+	///dispatch function
+	void operator<<(Msg &&msg) {
+		queue.push(std::move(msg));
 	}
 
 	///clear the queue
@@ -144,6 +154,11 @@ public:
 	///allows to use syntax function >> dispatcher
 	friend void operator>>(const Msg &msg, Dispatcher &dispatcher) {
 		dispatcher << msg;
+	}
+
+	///allows to use syntax function >> dispatcher
+	friend void operator>>(Msg &&msg, Dispatcher &dispatcher) {
+		dispatcher << std::move(msg);
 	}
 
 };
