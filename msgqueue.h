@@ -89,9 +89,9 @@ public:
 
 protected:
 	QueueImpl queue;
-	mutable std::mutex lock;
-	std::condition_variable condvar;
-	typedef std::unique_lock<std::mutex> Sync;
+	mutable std::recursive_mutex lock;
+	std::condition_variable_any condvar;
+	typedef std::unique_lock<std::recursive_mutex> Sync;
 };
 
 
