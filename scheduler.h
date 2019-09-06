@@ -14,6 +14,7 @@
 #include "dispatcher.h"
 #include "refcnt.h"
 #include "waitableEvent.h"
+#include "future.h"
 
 
 namespace ondra_shared {

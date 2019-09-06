@@ -34,9 +34,10 @@ namespace ondra_shared {
 template<typename T, typename Less = std::less<T> >
 class linear_set {
 
-	using VecT = std::vector<T>;
 
 public:
+	using VecT = std::vector<T>;
+
 	using iterator = typename VecT::iterator;
 	using const_iterator = typename VecT::const_iterator;
 	using reverse_iterator = typename VecT::reverse_iterator;
@@ -62,6 +63,7 @@ public:
 	template<typename K>
 	size_type erase( const K& key );
 	void swap( linear_set& other ) noexcept;
+	void swap( std::vector<value_type>&  other ) noexcept;
 
 	bool empty() const noexcept {return data.empty();}
 	size_type size() const noexcept {return data.size();}
@@ -152,8 +154,8 @@ template<typename T, typename Less>
 std::pair<typename linear_set<T, Less>::iterator, bool>
 	linear_set<T, Less>::find_exists(const value_type& value) {
 	auto where = lower_bound(value);
-	if (where == end()) return {where, false};
-	return {where, !less(value, *where)};
+	if (where == end()) return {where, true};
+	return {where, less(value, *where)};
 }
 
 template<typename T, typename Less>
@@ -161,7 +163,7 @@ std::pair<typename linear_set<T, Less>::iterator, bool>
 	linear_set<T, Less>::insert( const value_type& value ) {
 
 	auto f = find_exists(value);
-	if (f.second) return f;
+	if (!f.second) return f;
 	data.insert(f.first, value);
 	return f;
 }
@@ -171,7 +173,7 @@ std::pair<typename linear_set<T, Less>::iterator, bool>
 	linear_set<T, Less>::insert( value_type&& value ) {
 
 	auto f = find_exists(value);
-	if (f.second) return f;
+	if (!f.second) return f;
 	auto dist = f.first - data.begin();
 	data.insert(f.first, std::move(value));
 	return std::make_pair(data.begin()+dist,true);
@@ -394,6 +396,15 @@ linear_set<T, Less>::linear_set(std::vector<T>&& other, const Less& comp)
 :data(std::move(other)), less(comp) {
 	std::sort<iterator,const Less &>(data.begin(),data.end(),comp);
 }
+
+template<typename T, typename Less>
+void linear_set<T, Less>::swap( std::vector<value_type>&  other ) noexcept {
+	std::swap(other, data);
+	if (!data.empty())
+		std::sort<iterator,const Less &>(data.begin(),data.end(),less);
+}
+
+
 }
 
 #endif /* ONDRA_SHARED_LINEAR_SET_H_87986548794654 */

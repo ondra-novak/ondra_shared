@@ -79,6 +79,9 @@ public:
 	void swap( linear_map& other ) noexcept {
 		dset.swap(other.dset);
 	}
+	void swap( std::vector<value_type>& other ) noexcept {
+		dset.swap(other);
+	}
 
 	bool empty() const noexcept {return dset.empty();}
 	size_type size() const noexcept {return dset.size();}
