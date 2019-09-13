@@ -183,7 +183,7 @@ public:
 
 protected:
 
-	const std::vector<Switch> &switches;
+	std::vector<Switch> switches;
 
 };
 
