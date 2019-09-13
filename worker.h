@@ -25,7 +25,7 @@ public:
 	typedef Dispatcher::Msg Msg;
 
 	///dispatch the message
-	virtual void dispatch(const Msg &msg)	= 0;
+	virtual void dispatch( Msg &&msg)	= 0;
 
 	///run the worker for current thread
 	virtual void run() noexcept	= 0;
@@ -126,8 +126,8 @@ public:
 	class DefaultWorker: public AbstractWorker {
 	public:
 
-		virtual void dispatch(const Msg &msg) override	{
-			d->dispatch(msg);
+		virtual void dispatch(Msg &&msg) override	{
+			d->dispatch(std::move(msg));
 		}
 
 		void addThread() {
@@ -213,8 +213,8 @@ public:
 
 	///dispatch a single function
 	/** calls the function in context of the worker */
-	void dispatch(const Msg &msg) const{
-		wrk->dispatch(msg);
+	void dispatch(Msg &&msg) const{
+		wrk->dispatch(std::move(msg));
 	}
 
 	///Clears variable
