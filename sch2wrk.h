@@ -17,8 +17,8 @@ class WorkerByScheduler: public AbstractWorker {
 public:
 	WorkerByScheduler(const SchedulerT<TimePoint> &sch):sch(sch) {}
 
-	virtual void dispatch(const Msg &msg){
-		sch.immediate() >> msg;
+	virtual void dispatch(Msg &&msg){
+		sch.immediate() >> std::move(msg);
 	}
 	virtual void run() noexcept	{}
 	virtual void flush() noexcept {

@@ -92,7 +92,7 @@ public:
 
 
 		while (!!cmdIter) {
-			std::initializer_list<Switch>::const_iterator iter;
+
 			char short_sw = 0;
 			const char *long_sw = nullptr;
 			if (cmdIter.isOpt()) short_sw = cmdIter.getOpt();
@@ -104,15 +104,18 @@ public:
 				else return  s.short_sw == short_sw;
 			};
 
-			iter = std::find_if(switches.begin(), switches.end(), pred);
+			auto iter = std::find_if(switches.begin(), switches.end(), pred);
 			if (iter == switches.end()) {
-				iter = std::find_if(default_switches.begin(), default_switches.end(), pred);
-				if (iter == default_switches.end()) {
+				auto iter2 = std::find_if(default_switches.begin(), default_switches.end(), pred);
+				if (iter2 == default_switches.end()) {
 					return false;
+				}else {
+					iter2->handler(cmdIter);
 				}
+			} else {
+				iter->handler(cmdIter);
 			}
 
-			iter->handler(cmdIter);
 		}
 
 
@@ -180,7 +183,7 @@ public:
 
 protected:
 
-	const std::initializer_list<Switch> &switches;
+	const std::vector<Switch> &switches;
 
 };
 

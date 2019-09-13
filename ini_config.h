@@ -170,7 +170,7 @@ public:
 				(path.length > 2 && isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));
 	}
 #else
-	StrViewA pathSeparator="/";
+	static constexpr StrViewA pathSeparator="/";
 	static inline bool isRooted(StrViewA path) {
 		return !path.empty() && path[0] == '/';
 	}
