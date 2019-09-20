@@ -14,6 +14,19 @@ namespace ondra_shared {
 	template<typename T> struct RemoveConst {typedef T Result;};
 	template<typename T> struct RemoveConst<const T> {typedef T Result;};
 	template<typename T> class StringView;
+	template<typename T> struct StringLess {
+	public:
+		bool operator()(const T &a, const T &b) const {return a < b;}
+	};
+	template<> struct StringLess<char> {
+	public:
+		bool operator()(char a, char b) const {return static_cast<unsigned char>(a) < static_cast<unsigned char>(b);}
+	};
+	template<> struct StringLess<const char> {
+	public:
+		bool operator()(char a, char b) const {return static_cast<unsigned char>(a) < static_cast<unsigned char>(b);}
+	};
+
 
 	///stores a refernece to string and size
 	/** Because std::string is very slow and heavy */
@@ -49,13 +62,14 @@ namespace ondra_shared {
 		}
 
 		int compare(const StringViewBase &other) const {
+			StringLess<T> less;
 			//equal strings by pointer and length
 			if (other.data == data && other.length == length) return 0;
 			//compare char by char
 			std::size_t cnt = std::min(length, other.length);
 			for (std::size_t i = 0; i < cnt; ++i) {
-				if (data[i] < other.data[i]) return -1;
-				if (data[i] > other.data[i]) return 1;
+				if (less(data[i],other.data[i])) return -1;
+				if (less(other.data[i],data[i])) return 1;
 			}
 			if (length < other.length) return -1;
 			if (length > other.length) return 1;
