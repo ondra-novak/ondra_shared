@@ -92,6 +92,86 @@ protected:
 
 };
 
+class StdLogFileRotating: public StdLogProviderFactory  {
+public:
+
+	template<typename Str>
+	StdLogFileRotating(Str &&pathname, LogLevel minLevel = LogLevel::info, unsigned int rotate_count=7, unsigned int rotate_interval = 86400)
+		:StdLogProviderFactory ( minLevel)
+		 ,pathname(std::forward<Str>(pathname))
+		 ,rotate_count(rotate_count)
+		 ,rotate_interval(rotate_interval)
+		 {
+
+		day_num = readLastDayNumber();
+		if (day_num) {
+			outfile.open(pathname, std::ios::app);
+		}
+	}
+
+
+	void doRotate() {
+		std::string n1;
+		std::string n2;
+		appendNumber(n2, rotate_count);
+		for (int i = rotate_count; i > 1; i--) {
+			std::swap(n2,n1);
+			appendNumber(n2,i-1);
+			std::rename(n2.c_str(),n1.c_str());
+		}
+		std::rename(pathname.c_str(),n2.c_str());
+
+	}
+
+	void appendNumber(std::string &buff, int number) {
+		buff.clear();
+		buff.append(pathname);
+		buff.push_back('.');
+		unsignedToString(number, [&](char c){buff.push_back(c);}, 10, 4);
+	}
+
+	unsigned int readLastDayNumber() {
+		std::ifstream f(pathname, std::ios::in);
+		if (!f) return 0;
+		std::string buff;
+		std::getline(f,buff);
+		auto p = buff.rfind(':');
+		if (p == buff.npos) return 0;
+		return std::strtoul(buff.c_str()+p,0,10);
+	}
+
+	virtual void writeToLog(const StrViewA &line, const std::time_t &t, LogLevel) override {
+		unsigned int d = t/rotate_interval;
+		if (d != day_num) {
+			day_num = d;
+			outfile.close();
+			doRotate();
+			outfile.open(pathname,std::ios::app);
+			outfile << "Rotation serial number.: " << d << std::endl;
+		}
+		outfile << line << std::endl;
+		outfile.flush();
+	}
+
+
+	static PStdLogProviderFactory create(StrViewA pathname, LogLevel minLevel, unsigned int rotate_count = 7, unsigned int rotate_interval = 86400) {
+		if (pathname.empty()) return new StdLogProviderFactory(minLevel);
+		else return new StdLogFileRotating(pathname, minLevel, rotate_count, rotate_interval);
+	}
+
+	static PStdLogProviderFactory create(StrViewA pathname, StrViewA level, LogLevel defaultLevel, unsigned int rotate_count = 7, unsigned int rotate_interval = 86400) {
+		LogLevelToStrTable lstr;
+		auto l = lstr.fromString(level,defaultLevel);
+		return create(pathname, l, rotate_count, rotate_interval);
+	}
+
+protected:
+	std::string pathname;
+	std::ofstream outfile;
+	unsigned int rotate_count;
+	unsigned int day_num;
+	unsigned int rotate_interval;
+};
 
 
 

@@ -71,10 +71,12 @@ public:
 
 		config.load(configPath);
 		auto logcfg = config[log_section];
-		logProvider = StdLogFile::create(
+		logProvider = StdLogFileRotating::create(
 						verbose?std::string(""):logcfg["file"].getPath(""),
 						debug?StrViewA(""):logcfg["level"].getString(""),
-						LogLevel::debug);
+						LogLevel::debug,
+						logcfg["rotation"].getUInt(7),
+						logcfg["interval"].getUInt(86400));
 		logProvider->setDefault();
 		return true;
 
