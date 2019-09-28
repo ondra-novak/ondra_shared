@@ -90,9 +90,9 @@ protected:
 	std::ofstream outfile;
 	int autorotate_count;
 
-
-
 };
+
+
 
 
 

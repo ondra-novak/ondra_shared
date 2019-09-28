@@ -74,7 +74,11 @@ public:
 
 };
 
-
+///Log provider - handles all log requests
+/** Each thread should have own log provider. It is possible to have one
+ * log provider shared between threads, but this requires non-MT access to the provider.
+ *
+ */
 class AbstractLogProvider {
 public:
 	///Start sending a log message
@@ -156,6 +160,17 @@ public:
 		return p;
 	}
 	virtual bool isLogLevelEnabled(LogLevel level) const = 0;
+
+	///Creates new log provider detached from the thread
+	/** NOTE: if no factory is initialized, returns nullptr*/
+	static PLogProvider create() {
+		AbstractLogProviderFactory *f = AbstractLogProviderFactory::getInstance();
+		if (f != nullptr) {
+			return f->create();
+		} else {
+			return PLogProvider();;
+		}
+	}
 
 	virtual ~AbstractLogProvider() {}
 
@@ -496,7 +511,6 @@ class LogObjectT {
 		template<typename T>
 		LogObjectT(const LogObjectT &x, const T &v)
 		{
-
 			initSection(x.lp, v);
 		}
 
@@ -504,6 +518,10 @@ class LogObjectT {
 		/**Using such log object doesn't produce any output, however you can initialize
 		 * the log provider later */
 		LogObjectT() {}
+
+		LogObjectT(LogObjectT &&other):lp(std::move(other.lp)) {}
+
+		LogObjectT(Backend &&v):lp(std::move(v)) {}
 
 
 		template<typename T>
@@ -532,8 +550,8 @@ class LogObjectT {
 	protected:
 		Backend lp;
 
-		template<typename T>
-		void initSection(AbstractLogProvider *clp, const T &v) {
+		template<typename B, typename T>
+		void initSection(B &&clp, const T &v) {
 			if (clp != nullptr) {
 				WrFn wr;
 				logPrintValue(wr,v);
@@ -606,23 +624,23 @@ class LogObjectT {
 		StringView<std::pair<StrViewA,LogLevel> >levelMap;
 	};
 
-
-	template<const char *&prefix>
+	template<typename IdentClass>
 	class TaskCounter {
 	public:
-		TaskCounter () {
+		TaskCounter (const char *prefix):prefix(prefix) {
 			static std::atomic<unsigned int> counter(0);
 			curValue = ++counter;
 		}
 
 	unsigned int curValue;
+	const char *prefix;
 	};
 
-	template<typename WriteFn, const char *&prefix>
-	void logPrintValue(const WriteFn &wr, const TaskCounter<prefix> &t) {
-		wr(prefix);
+	template<typename WriteFn, typename IdentClass>
+	void logPrintValue(const WriteFn &wr, const TaskCounter<IdentClass> &t) {
+		wr(t.prefix);
 		wr(':');
-		wr(t.curValue);
+		unsignedToString(t.curValue, wr, 16, 4);
 	}
 
 

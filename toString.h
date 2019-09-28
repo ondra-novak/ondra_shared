@@ -8,7 +8,7 @@
 namespace ondra_shared {
 
 template<typename Number, typename Fn>
-void unsignedToString(const Number &n, const Fn &fn, int base=10, int leftZeroes=1) {
+void unsignedToString(const Number &n, Fn &&fn, int base=10, int leftZeroes=1) {
 
 	if (n == 0 && leftZeroes<1) return;
 	unsignedToString(n/base, fn, base, leftZeroes-1);
@@ -19,7 +19,7 @@ void unsignedToString(const Number &n, const Fn &fn, int base=10, int leftZeroes
 }
 
 template<typename Number, typename Fn>
-void signedToString(const Number &n, const Fn &fn, int base=10, int leftZeroes=1) {
+void signedToString(const Number &n, Fn &&fn, int base=10, int leftZeroes=1) {
 
 	if (n < 0) {
 		fn('-');
@@ -32,7 +32,7 @@ void signedToString(const Number &n, const Fn &fn, int base=10, int leftZeroes=1
 
 
 template<typename Number, typename Fn>
-void floatToString(Number value, const Fn &fn, int maxPrecisionDigits=8) {
+void floatToString(Number value, Fn &&fn, int maxPrecisionDigits=8) {
 	static std::uintptr_t fracMultTable[10] = {
 				1, //0
 				10, //1
