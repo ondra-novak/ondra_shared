@@ -137,7 +137,8 @@ public:
 		std::getline(f,buff);
 		auto p = buff.rfind(':');
 		if (p == buff.npos) return 0;
-		return std::strtoul(buff.c_str()+p,0,10);
+		const char *nr = buff.c_str()+p+1;
+		return std::strtoul(nr,nullptr, 10);
 	}
 
 	virtual void writeToLog(const StrViewA &line, const std::time_t &t, LogLevel) override {
@@ -147,7 +148,7 @@ public:
 			outfile.close();
 			doRotate();
 			outfile.open(pathname,std::ios::app);
-			outfile << "Rotation serial number.: " << d << std::endl;
+			outfile << "Rotation serial nr.: " << d << std::endl;
 		}
 		outfile << line << std::endl;
 		outfile.flush();
