@@ -27,7 +27,28 @@ namespace ondra_shared {
 		bool operator()(char a, char b) const {return static_cast<unsigned char>(a) < static_cast<unsigned char>(b);}
 	};
 
+	//HACK: Under GCC-9 the string_view requires trival type of T.
+	//So for the non trival type, conversion to string_view is not possible
+	//Define DummyConv to disable such conversion for non-trivial type
+	template<typename T, bool>
+	struct StringViewStdConvTraits {
+		class DummyConv {
+			constexpr DummyConv(const T &, std::size_t) {};
+			constexpr T *data() const {return nullptr;}
+			constexpr std::size_t length() const {return 0;}
+		};
 
+		using Placeholder = DummyConv;
+	};
+#if __cplusplus >= 201703L
+
+	template<typename T>
+	struct StringViewStdConvTraits<T,true>  {
+		using RT = typename RemoveConst<T>::Result;
+		using Placeholder = std::basic_string_view<RT, std::char_traits<RT> >;
+	};
+
+#endif
 	///stores a refernece to string and size
 	/** Because std::string is very slow and heavy */
 	template<typename T>
@@ -35,6 +56,7 @@ namespace ondra_shared {
 	public:
 		typedef T Type;
 		typedef typename RemoveConst<T>::Result MutableType;
+		using string_view = typename StringViewStdConvTraits<T, std::is_trivial<T>::value && std::is_standard_layout<T>::value >::Placeholder;
 
 		constexpr StringViewBase() :data(0), length(0) {}
 		constexpr StringViewBase(T *str) : data(str), length(calcLength(str)) {}
@@ -50,7 +72,7 @@ namespace ondra_shared {
 
 		operator std::basic_string<MutableType>() const { return std::basic_string<MutableType>(data, length); }
 #if __cplusplus >= 201703L
-		operator std::basic_string_view<MutableType>() const { return std::basic_string_view<MutableType>(data, length); }
+		operator string_view() const { return string_view(data, length); }
 #endif
 		StringViewBase substr(std::size_t index) const {
 			std::size_t indexadj = std::min(index, length);
@@ -228,6 +250,7 @@ namespace ondra_shared {
 	class StringView: public StringViewBase<const T> {
 	public:
 		typedef StringViewBase<const T> Base;
+		using string_view=typename Base::string_view;
 		using StringViewBase<const T>::StringViewBase;
 		constexpr StringView() {}
 		constexpr StringView(const StringViewBase<T> &other):Base(other.data, other.length) {}
@@ -238,7 +261,7 @@ namespace ondra_shared {
 		constexpr StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
 		constexpr StringView(const StringView &other):Base(other) {}
 #if __cplusplus >= 201703L
-		constexpr StringView(const std::basic_string_view<T> &str):Base(str.data(), str.length()) {}
+		constexpr StringView(const string_view &str):Base(str.data(), str.length()) {}
 #endif
 		StringView substr(std::size_t index) const {
 			return StringView(Base::substr(index));
