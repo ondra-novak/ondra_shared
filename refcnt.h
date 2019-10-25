@@ -28,9 +28,12 @@ namespace ondra_shared {
 			return counter > 1;
 		}
 
+		long use_count() const noexcept {
+			return counter;
+		}
 
 	protected:
-		mutable std::atomic_int counter;
+		mutable std::atomic_long counter;
 
 
 		template<typename T> friend class RefCntPtr;
@@ -95,6 +98,11 @@ namespace ondra_shared {
 		bool operator!=(std::nullptr_t) const noexcept { return ptr != 0; }
 		bool operator==(const RefCntPtr &other) const noexcept { return ptr == other.ptr; }
 		bool operator!=(const RefCntPtr &other) const noexcept { return ptr != other.ptr; }
+
+		long use_count() const noexcept {
+			return ptr?ptr->use_count():0;
+		}
+
 
 	protected:
 		T *ptr;
