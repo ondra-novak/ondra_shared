@@ -224,7 +224,7 @@ public:
 		auto ns = time_point_cast<nanoseconds>(tp) -
 		             time_point_cast<nanoseconds>(secs);
 
-		timespec tmout{secs.time_since_epoch().count(), ns.count()};
+		timespec tmout{static_cast<time_t>(secs.time_since_epoch().count()),static_cast<long>(ns.count())};
 		while (sem_timedwait(&sm, &tmout) != 0) {
 			if (errno != EINTR) return false;
 		}
