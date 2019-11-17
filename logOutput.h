@@ -237,22 +237,23 @@ protected:
 };
 
 
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, StrViewA v) {	wr(v);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, const char *v) {	wr(StrViewA(v));}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, BinaryView v) {
+template<typename WriteFn> void logPrintValue(WriteFn &wr, StrViewA v) {	wr(v);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, const char *v) {	wr(StrViewA(v));}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, char *v) {	wr(StrViewA(v));}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, BinaryView v) {
 	for (auto &&c : v) unsignedToString(c,wr,16,2);
 }
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, unsigned long long v) {unsignedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, unsigned long v) {unsignedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, unsigned int v) {unsignedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, unsigned short v) {unsignedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed long long v) {signedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed long v) {signedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed int v) {signedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, signed short v) {signedToString(v,wr);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, double v) {floatToString(v,wr,8);}
-template<typename WriteFn> void logPrintValue(const WriteFn &wr, float v) {floatToString(v,wr,8);}
-template<typename WriteFn, typename T> void logPrintValue(const WriteFn &wr, const std::initializer_list<T> &v) {
+template<typename WriteFn> void logPrintValue(WriteFn &wr, unsigned long long v) {unsignedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, unsigned long v) {unsignedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, unsigned int v) {unsignedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, unsigned short v) {unsignedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, signed long long v) {signedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, signed long v) {signedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, signed int v) {signedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, signed short v) {signedToString(v,wr);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, double v) {floatToString(v,wr,8);}
+template<typename WriteFn> void logPrintValue(WriteFn &wr, float v) {floatToString(v,wr,8);}
+template<typename WriteFn, typename T> void logPrintValue(WriteFn &wr, const std::initializer_list<T> &v) {
 	for (auto &&x:v ) {
 		wr(" ");
 		logPrintValue(wr, x);
