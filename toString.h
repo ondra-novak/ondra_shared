@@ -3,7 +3,7 @@
 #ifndef _ONDRA_SHARED_TOSTRING_H_39289204239042_
 #define _ONDRA_SHARED_TOSTRING_H_39289204239042_
 
-#include <math.h>
+#include <cmath>
 
 namespace ondra_shared {
 
@@ -54,7 +54,7 @@ void floatToString(Number value, Fn &&fn, int maxPrecisionDigits=8) {
 		//calculate exponent of value
 		//123897 -> 5 (1.23897e5)
 		//0.001248 -> 3 (1.248e-3)
-		double fexp = floor(log10(fabs(value)));
+		double fexp = floor(log10(std::abs(value)));
 
 		if (!std::isfinite(fexp)) {
 			if (fexp < 0) {
