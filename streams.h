@@ -68,11 +68,11 @@ class ostream : public std::ostream {
  * @tparam Fn type of function int(void)
  */
 template<typename Fn>
-class fdistream : public std::istream {
+class istream : public std::istream {
   protected:
     _details::input_adapter<Fn> buf;
   public:
-    fdistream (Fn &&fn) : std::istream(0), buf(std::move(fn)) {
+    istream (Fn &&fn) : std::istream(0), buf(std::move(fn)) {
         rdbuf(&buf);
     }
 };
