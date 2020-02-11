@@ -68,6 +68,15 @@ public:
 
 	///destructor
 	virtual ~AbstractScheduler() {}
+
+	virtual void yield() = 0;
+
+
+	static AbstractScheduler *registerOrGetScheduler(bool setValue = false, AbstractScheduler *x = nullptr) {
+		static thread_local AbstractScheduler *curScheduler = nullptr;
+		if (setValue) {curScheduler = x;}
+		return curScheduler;
+	}
 };
 
 
@@ -127,7 +136,19 @@ public:
 			}
 		};
 
-		typedef std::priority_queue<ScheduledItem, std::vector<ScheduledItem>, LessScheduledItem> SchQueue;
+		class SchQueue: public std::priority_queue<ScheduledItem, std::vector<ScheduledItem>, LessScheduledItem> {
+		public:
+			using std::priority_queue<ScheduledItem, std::vector<ScheduledItem>, LessScheduledItem>::priority_queue;
+			using Super = std::priority_queue<ScheduledItem, std::vector<ScheduledItem>, LessScheduledItem>;
+
+			typename Super::value_type pop_top() {
+			    std::pop_heap(this->c.begin(), this->c.end(), this->comp);
+			    typename Super::value_type top = std::move(this->c.back());
+			    this->c.pop_back();
+			    return top;
+			}
+		};
+
 
 	public:
 
@@ -157,8 +178,10 @@ public:
 			}
 		}
 
+
 		template<typename InitFn>
 		void worker(InitFn && initFn) {
+			AbstractScheduler<TimePoint>::registerOrGetScheduler(true, this);
 			Dispatcher dispatcher;
 			SchQueue queue;
 			this->queue = &queue;
@@ -203,6 +226,11 @@ public:
 			dispatcher->dispatch(msg);
 		}
 
+		virtual void yield() override {
+			TimePoint tp = Clock::now();
+			SchQueue *q = queue;
+			execAllRetired(*q, tp);
+		}
 
 		virtual void remove(std::size_t id, std::function<void(bool)> cb) override {
 			SchQueue *q = queue;
@@ -241,13 +269,13 @@ public:
 		static TimePoint execAllRetired(SchQueue &q, const TimePoint &curTime) noexcept {
 			Duration z(Duration::zero());
 			while (!q.empty()) {
-				const ScheduledItem &itm = q.top();
-				if (itm.tp > curTime) return itm.tp;
+				const ScheduledItem &itm_r (q.top());
+				if (itm_r.tp > curTime) return itm_r.tp;
+				ScheduledItem itm (q.pop_top());
 				itm.msg();
 				if (itm.interval > z) {
 					q.push(ScheduledItem(curTime+itm.interval,itm.interval,itm.msg,itm.id));
 				}
-				q.pop();
 			}
 			return TimePoint::max();
 		}
@@ -447,6 +475,11 @@ public:
 		Countdown ctn(1);
 		immediate() >> [&]{ctn.dec();};
 		ctn.wait();
+	}
+
+	static void yield() {
+		AbstractScheduler<TimePoint> *x = AbstractScheduler<TimePoint>::registerOrGetScheduler();
+		if (x) x->yield();
 	}
 
 protected:
