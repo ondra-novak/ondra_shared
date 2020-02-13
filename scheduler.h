@@ -227,6 +227,12 @@ public:
 		}
 
 		virtual void yield() override {
+			while (!dispatcher->empty()) {
+				if (!dispatcher->pump()) {
+					dispatcher->quit();
+					break;
+				}
+			}
 			TimePoint tp = Clock::now();
 			SchQueue *q = queue;
 			execAllRetired(*q, tp);
