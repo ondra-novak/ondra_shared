@@ -298,7 +298,13 @@ namespace ondra_shared {
 		bool begins(const StringView &prefix) const {
 			return substr(0,prefix.length) == prefix;
 		}
+		bool startsWith(const StringView &prefix) const {
+			return substr(0,prefix.length) == prefix;
+		}
 		bool ends(const StringView &suffix) const {
+			return suffix.length<this->length && substr(this->length-suffix.length) == suffix;
+		}
+		bool endsWith(const StringView &suffix) const {
 			return suffix.length<this->length && substr(this->length-suffix.length) == suffix;
 		}
 
@@ -321,7 +327,6 @@ namespace ondra_shared {
 		StringView trim(const Fn &fn) {
 			return StringView(Base::trim(fn));
 		}
-
 	};
 
 
