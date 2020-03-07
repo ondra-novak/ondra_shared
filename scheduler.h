@@ -57,6 +57,15 @@ public:
 	 */
 	virtual void remove(std::size_t id, std::function<void(bool)> callback = nullptr) = 0;
 
+	///Removes all scheduled events
+	/**
+	 * @param callback if callback is specified, it is called, when all scheduled tasks are removed
+	 *
+	 * @note immediate tasks cannot be removed, however, because removeAll is also immediate task, it is executed after
+	 * previously immediate tasks are already done
+	 */
+	virtual void removeAll(std::function<void()> callback = nullptr) = 0;
+
 	///Executes message immediate
 	/**
 	 * @param msg message (function) called immediate
@@ -69,8 +78,10 @@ public:
 	///destructor
 	virtual ~AbstractScheduler() {}
 
-	virtual void yield() = 0;
+	virtual void yield() noexcept = 0;
 
+	///returns true, if operation is executed during yield
+	virtual bool nested() const noexcept = 0;
 
 	static AbstractScheduler *registerOrGetScheduler(bool setValue = false, AbstractScheduler *x = nullptr) {
 		static thread_local AbstractScheduler *curScheduler = nullptr;
@@ -114,6 +125,10 @@ public:
 	 */
 	void remove(std::size_t id, const std::function<void(bool)> &cb = nullptr) const {
 		impl->remove(id, cb);
+	}
+
+	void removeAll(const std::function<void()> &cb = nullptr) const {
+		impl->removeAll(cb);
 	}
 
 
@@ -226,7 +241,8 @@ public:
 			dispatcher->dispatch(msg);
 		}
 
-		virtual void yield() override {
+		virtual void yield() noexcept override  {
+			nestcnt++;
 			while (!dispatcher->empty()) {
 				if (!dispatcher->pump()) {
 					dispatcher->quit();
@@ -236,6 +252,11 @@ public:
 			TimePoint tp = Clock::now();
 			SchQueue *q = queue;
 			execAllRetired(*q, tp);
+			nestcnt--;
+		}
+
+		virtual bool nested() const noexcept override {
+			return nestcnt != 0;
 		}
 
 		virtual void remove(std::size_t id, std::function<void(bool)> cb) override {
@@ -266,6 +287,18 @@ public:
 
 		}
 
+		virtual void removeAll(std::function<void()> cb) override {
+				SchQueue *q = queue;
+				dispatcher->dispatch([cb, q]{
+					{
+						SchQueue tmp;
+						tmp.swap(*q);
+					}
+					if (cb != nullptr) cb();
+				});
+
+		}
+
 		~BasicScheduler() {
 			dispatcher->quit();
 		}
@@ -291,6 +324,7 @@ public:
 		SchQueue *queue;
 		Dispatcher *dispatcher;
 		std::atomic<std::size_t> idcounter;
+		int nestcnt = 0;
 
 	};
 
@@ -478,14 +512,37 @@ public:
 	///Synchronizes execution with the scheduler
 	/** useful to ensure,that operation has been removed and it is not executed right now */
 	void sync() {
-		Countdown ctn(1);
-		immediate() >> [&]{ctn.dec();};
-		ctn.wait();
+		bool wasNested = false;
+		do {
+			Countdown ctn(1);
+			immediate() >> [&]{
+				AbstractScheduler<TimePoint> *x = AbstractScheduler<TimePoint>::registerOrGetScheduler();
+				wasNested = x->nested(); ctn.dec();
+			};
+			ctn.wait();
+		} while (wasNested);
 	}
 
-	static void yield() {
+	///Suspends current task and executes other sheduled tasks is there any.
+	/**
+	 * Function returns after all sheduled tasks has been finished. Note that if other task
+	 * calls this function, the task can be suspended as well. To avoid nested yields, you
+	 * can call nested() to test if this is the case
+	 */
+	static void yield() noexcept {
 		AbstractScheduler<TimePoint> *x = AbstractScheduler<TimePoint>::registerOrGetScheduler();
 		if (x) x->yield();
+	}
+
+	///Determines, whether the current task is nested during yield of other task
+	/** function can be called only inside of scheduler's thread.
+	 *
+	 * @retval true cur. task was executed during yield()
+	 * @retval false cur. task was executed by normal flow, or current thread doesn't belongs to scheduler
+	 */
+	static bool nested() noexcept {
+		AbstractScheduler<TimePoint> *x = AbstractScheduler<TimePoint>::registerOrGetScheduler();
+		return x && x->nested();
 	}
 
 protected:

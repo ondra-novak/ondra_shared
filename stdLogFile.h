@@ -144,9 +144,9 @@ public:
 	virtual void writeToLog(const StrViewA &line, const std::time_t &t, LogLevel) override {
 		unsigned int d = t/rotate_interval;
 		if (d != day_num) {
-			day_num = d;
 			outfile.close();
-			doRotate();
+			day_num = readLastDayNumber();
+			if (day_num != d) doRotate();
 			outfile.open(pathname,std::ios::app);
 			outfile << "Rotation serial nr.: " << d << std::endl;
 		}
