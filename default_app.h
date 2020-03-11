@@ -50,35 +50,41 @@ public:
 
 	bool init(CmdArgIter &&cmdIter) {
 
-		const std::initializer_list<Switch> *ptr_default_switches;
-		const std::initializer_list<Switch> & default_switches = {
-				Switch{'h',"help",[&](CmdArgIter&){this->showHelp(*ptr_default_switches);exit(0);},"show this help"},
-				Switch{'d',"debug",[&](CmdArgIter&){debug=true;},"enable debug"},
-				Switch{'v',"verbose",[&](CmdArgIter&){verbose=true;},"verbose mode"},
-				Switch{'f',"config",[&](CmdArgIter&args){
-					configPath=args.getNext();
-					if (configPath.is_relative())
-						configPath = std::experimental::filesystem::current_path() / configPath;
-				},"<config_file> specify path to configuration file"}
-		};
-		ptr_default_switches = &default_switches;
+		try {
+			const std::initializer_list<Switch> *ptr_default_switches;
+			const std::initializer_list<Switch> & default_switches = {
+					Switch{'h',"help",[&](CmdArgIter&){this->showHelp(*ptr_default_switches);exit(0);},"show this help"},
+					Switch{'d',"debug",[&](CmdArgIter&){debug=true;},"enable debug"},
+					Switch{'v',"verbose",[&](CmdArgIter&){verbose=true;},"verbose mode"},
+					Switch{'f',"config",[&](CmdArgIter&args){
+						configPath=args.getNext();
+						if (configPath.is_relative())
+							configPath = std::experimental::filesystem::current_path() / configPath;
+					},"<config_file> specify path to configuration file"}
+			};
+			ptr_default_switches = &default_switches;
 
-		bool res = process_switches(cmdIter, default_switches);
+			bool res = process_switches(cmdIter, default_switches);
 
-		this->args = std::move(cmdIter);
+			this->args = std::move(cmdIter);
 
-		if (!res) return false;
+			if (!res) return false;
 
-		config.load(configPath);
-		auto logcfg = config[log_section];
-		logProvider = StdLogFileRotating::create(
-						verbose?std::string(""):logcfg["file"].getPath(""),
-						debug?StrViewA(""):logcfg["level"].getString(""),
-						LogLevel::debug,
-						logcfg["rotation"].getUInt(7),
-						logcfg["interval"].getUInt(86400));
-		logProvider->setDefault();
-		return true;
+			config.load(configPath);
+			auto logcfg = config[log_section];
+			logProvider = StdLogFileRotating::create(
+							verbose?std::string(""):logcfg["file"].getPath(""),
+							debug?StrViewA(""):logcfg["level"].getString(""),
+							LogLevel::debug,
+							logcfg["rotation"].getUInt(7),
+							logcfg["interval"].getUInt(86400));
+			logProvider->setDefault();
+			return true;
+
+		} catch (std::exception &e) {
+			output << e.what() << std::endl;
+			return false;
+		}
 
 	}
 
@@ -182,6 +188,14 @@ public:
 	}
 
 	virtual ~DefaultApp() {}
+
+	std::vector<StrViewA> getArgs() {
+		std::vector<StrViewA> argList;
+		while (!!(*args)) argList.push_back(args->getNext());
+		return argList;
+	}
+
+
 
 protected:
 

@@ -84,6 +84,7 @@ namespace ondra_shared {
 		using stdstring = typename StringStdConvTraits<T, std::is_trivial<T>::value && std::is_standard_layout<T>::value >::Placeholder;
 
 		constexpr StringViewBase() :data(0), length(0) {}
+		constexpr StringViewBase(const StringViewBase &other):data(other.data), length(other.length) {}
 		constexpr StringViewBase(T *str) : data(str), length(calcLength(str)) {}
 		constexpr StringViewBase(T *str, std::size_t length): data(str),length(length) {}
 
@@ -285,7 +286,6 @@ namespace ondra_shared {
 		constexpr StringView(const std::vector<T> &string) : Base(string.data(),string.size()) {}
 		constexpr StringView(const std::initializer_list<T> &list) :Base(list.begin(), list.size()) {}
 		constexpr StringView(const MutableStringView<T> &src): Base(src.data, src.length) {}
-		constexpr StringView(const StringView &other):Base(other) {}
 #if __cplusplus >= 201703L
 		constexpr StringView(const string_view &str):Base(str.data(), str.length()) {}
 #endif
