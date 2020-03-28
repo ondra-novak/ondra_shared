@@ -192,8 +192,12 @@ protected:
 inline std::string IniConfig::Value::getPath() const {
 	std::string s;
 	if (v.empty()) return std::string();
-	s.reserve(v.getLength() + p.getLength());
-	s.append(p.getData(),p.getLength());
+	if (isRooted(v)) {
+		s.reserve(v.getLength());
+	} else {
+		s.reserve(v.getLength() + p.getLength());
+		s.append(p.getData(),p.getLength());
+	}
 	s.append(v.getData(),v.getLength());
 	return s;
 }
@@ -386,11 +390,7 @@ inline std::intptr_t IniConfig::Value::getInt() const {
 
 inline IniConfig::Value IniConfig::createValue(const String &value) {
 	Value vv;
-	if (isRooted(value)) {
-		vv.p = StrViewA();
-	} else {
-		vv.p = curPath;
-	}
+	vv.p = curPath;
 	vv.v = value;
 	return vv;
 }
