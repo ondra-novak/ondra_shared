@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -56,6 +57,7 @@ public:
 	FD stdout;
 	FD stderr;
 	pid_t pid;
+	int status = 0;
 
 	auto reader() {return [in = std::move(stdout)]() mutable -> int {
 		unsigned char c;
@@ -83,20 +85,46 @@ public:
 		,pid(other.pid) {other.pid = 0;}
 
 	~ExternalProcess() {
-		int status;
-		if (pid) waitpid(pid, &status,0);
+		join();
 	}
 
 	///Waits to process exit
 	int join() {
-		int status = 0;
 		if (pid) {
 			waitpid(pid,&status,0);
+			pid = 0;
 		}
-		pid = 0;
 		return status;
 	}
 
+
+	enum Status {
+		running,
+		normal_exit,
+		signal_exit
+	};
+
+	struct ExitStatus {
+		Status st;
+		int code;
+	};
+
+	ExitStatus getExitStatus() const {
+		if (pid) return {running};
+		if (WIFSIGNALED(status)) {
+			return {signal_exit, WTERMSIG(status)};
+		} else {
+			return {normal_exit, WEXITSTATUS(status)};
+		}
+	}
+
+	bool isRunning()  {
+		if (pid) {
+			if (waitpid(pid,&status,WNOHANG) == 0) return true;
+			pid = 0;
+		}
+		return false;
+	}
 
 	bool sendSignal(int signal) {
 		return !::kill(pid, signal);
