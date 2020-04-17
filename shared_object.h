@@ -150,7 +150,7 @@ class SharedObject {
 		}
 
 		const Ret &operator*() const {return subj->get();}
-		operator const Ret *() const {return &subj->get();}
+		explicit operator const Ret *() const {return &subj->get();}
 		const Ret *operator->() const {return &subj->get();}
 		bool operator==(nullptr_t) const {return subj == nullptr;}
 		bool operator!=(nullptr_t) const {return subj != nullptr;}
@@ -159,10 +159,11 @@ class SharedObject {
 		template<typename B>
 		bool operator!=(const Lock<B> &oth) const {return subj != oth.subj;}
 		Ret &operator*() {return subj->get();}
+		operator bool() {return subj != nullptr;}
+		operator bool() const {return subj != nullptr;}
 		operator Ret *() {return &subj->get();}
 		Ret *operator->() {return &subj->get();}
-		operator bool() const {return subj->subj != nullptr;}
-		bool operator! () const {return subj->subj == nullptr;}
+		bool operator! () const {return subj == nullptr;}
 		void release() {
 			if (subj != nullptr) {
 				Behav::unlock(this->subj);
