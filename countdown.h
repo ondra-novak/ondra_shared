@@ -29,11 +29,13 @@ public:
 
 	///increment counter
 	int inc() {
+		std::unique_lock<std::mutex> _(mtx);
 		return ++counter;
 	}
 	///decrement counter
 	/** if counter reached zero, it releases waiting threads */
 	int dec() {
+		std::unique_lock<std::mutex> _(mtx);
 		int v = --counter;
 		if (v == 0) {
 			waiter.notify_all();
@@ -100,6 +102,7 @@ public:
 	 *
 	 */
 	int getCounter() const {
+		std::unique_lock<std::mutex> _(mtx);
 		return counter;
 	}
 
@@ -109,6 +112,7 @@ public:
 	 * if the counter is set to zero, it immediately releases all waiting threads
 	 */
 	void setCounter(int counter) {
+		std::unique_lock<std::mutex> _(mtx);
 		this->counter = counter;
 		if (counter == 0) {
 			waiter.notify_all();
@@ -122,14 +126,17 @@ public:
 	 * @retval true value set
 	 * @retval false value was not set
 	 *
-	 * @note only uses compare_exchange_strong function to atomically initialize the counter
 	 */
-	bool setCounterWhen(int expected, int desired, std::memory_order m = std::memory_order_seq_cst) {
-		bool r = this->counter.compare_exchange_strong(expected,desired,m);
-		if (r && desired == 0) {
-			waiter.notify_all();
+	bool setCounterWhen(int expected, int desired) {
+		std::unique_lock<std::mutex> _(mtx);
+		if (expected == this->counter) {
+			if (desired == 0) {
+				waiter.notify_all();
+			}
+			return true;
+		} else {
+			return false;
 		}
-		return r;
 	}
 
 	int operator++() {return inc();}
@@ -143,9 +150,9 @@ public:
 	void zeroWait() {return wait();}
 
 protected:
-	std::mutex mtx;
+	mutable std::mutex mtx;
 	std::condition_variable waiter;
-	std::atomic<int> counter ;
+	int counter ;
 };
 
 ///Helps to count of locks, can be included into clousure of asynchronous function
