@@ -113,7 +113,7 @@ template<typename Msg, typename QueueImpl>
 inline Msg MsgQueue<Msg, QueueImpl>::pop() {
 	Sync _(lock);
 	condvar.wait(_, [&]{return !queue.empty();});
-	Msg ret = queue.front();
+	Msg ret (std::move(queue.front()));
 	queue.pop();
 	return ret;
 }
@@ -129,10 +129,10 @@ template<typename Fn>
 inline bool MsgQueue<Msg, QueueImpl>::try_pump(Fn fn) {
 	Sync _(lock);
 	if (queue.empty()) return false;
-	Msg ret = queue.front();
+	Msg ret (std::move(queue.front()));
 	queue.pop();
 	_.unlock();
-	fn(ret);
+	fn(std::move(ret));
 	return true;
 }
 
@@ -141,10 +141,10 @@ template<typename Fn>
 inline void MsgQueue<Msg, QueueImpl>::pump(Fn fn) {
 	Sync _(lock);
 	condvar.wait(_, [&]{return !queue.empty();});
-	Msg ret = queue.front();
+	Msg ret (std::move(queue.front()));
 	queue.pop();
 	_.unlock();
-	fn(ret);
+	fn(std::move(ret));
 }
 
 template<typename Msg, typename QueueImpl>
@@ -153,10 +153,10 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_for(
 		Duration&& rel_time, Fn fn) {
 	Sync _(lock);
 	if (!condvar.wait_for(_, std::forward<Duration>(rel_time), [&]{return !queue.empty();})) return false;
-	Msg ret = queue.front();
+	Msg ret (std::move( queue.front()));
 	queue.pop();
 	_.unlock();
-	fn(ret);
+	fn(std::move(ret));
 	return true;
 }
 
@@ -166,10 +166,10 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_until(
 		TimePoint &&timeout_time, Fn fn) {
 	Sync _(lock);
 	if (!condvar.wait_until(_, std::forward<TimePoint>(timeout_time), [&]{return !queue.empty();})) return false;
-	Msg ret = queue.front();
+	Msg ret(std::move(queue.front()));
 	queue.pop();
 	_.unlock();
-	fn(ret);
+	fn(std::move(ret));
 	return true;
 }
 
