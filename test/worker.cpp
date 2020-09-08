@@ -9,7 +9,8 @@
 
 #include <fstream>
 #include "../worker.h"
-#include "../future.h"
+
+#include "../future_old.h"
 
 
 using namespace ondra_shared;

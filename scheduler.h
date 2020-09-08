@@ -12,9 +12,9 @@
 #include <functional>
 
 #include "dispatcher.h"
+#include "future.h"
 #include "refcnt.h"
 #include "waitableEvent.h"
-#include "future.h"
 
 
 namespace ondra_shared {
@@ -333,14 +333,7 @@ public:
 	template<typename Fut>
 	class FutureWithID: public Fut {
 	public:
-		using Fut::Fut;
-
-		///Sets ID
-		/**
-		 * Function is called by at() or after() to initialize ID
-		 * @param id
-		 */
-		void set_id(std::size_t id) {this->id = id;}
+		FutureWithID(Fut &&fut, std::size_t id):Fut(std::move(fut)),id(id) {}
 		///Retrieves ID
 		/** Retrieves id of scheduled item */
 		std::size_t get_id() const {return id;}
@@ -355,13 +348,28 @@ public:
 
 		template<typename Fn>
 		auto operator>>(Fn &&fn) {
-			typedef FutureFromType<decltype(std::declval<Fn>()())> FutFromType;
-			FutureWithID<typename FutFromType::type> fut;
-			fut.set_id(sch.impl->at(tp,[fut,fn=std::remove_reference_t<Fn>(fn)]() mutable {
-				fut.set_result_of(fn);
-			}));
-			return fut;
+			using FnRetType = std::remove_reference_t<decltype(fn())>;
+			using Builder = typename _details::FutureCBBuilder<FnRetType>::RetVal;
+			return at_impl(std::move(fn), std::is_same<Builder, void>());
 		}
+
+		template<typename Fn>
+		std::size_t at_impl(Fn &&fn, std::true_type &&) {
+			return sch.impl->at(tp, std::move(fn));
+		}
+
+		template<typename Fn>
+		auto at_impl(Fn &&fn, std::false_type &&) {
+			using FnRetType = std::remove_reference_t<decltype(fn())>;
+			using Builder = typename _details::FutureCBBuilder<FnRetType>;
+			std::size_t id;
+			auto fut = Builder::build(std::move(fn),[&](auto &&f2){
+				id = sch.impl->at(tp, std::move(f2));
+			});
+			return FutureWithID<typename Builder::RetVal>(std::move(fut), id);
+
+		}
+
 
 		SchedulerT sch;
 		TimePoint tp;
