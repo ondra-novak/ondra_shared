@@ -45,8 +45,17 @@ namespace _details {
 		static RetVal build(Fn &&fn, ProcessFn &&pfn);
 	};
 
+	class FutureSemaphore {
+	public:
+		std::mutex mx;
+		std::condition_variable cond;
+	};
+
 
 }
+
+
+
 
 ///The Future is variable which's value is resolved later
 /** This variable is created empty, like the std::optional, and later it
@@ -69,6 +78,20 @@ namespace _details {
  * @tparam T type of the value. You can't use 'void'. If you need such
  * future, construct an empty class for example.
  */
+template<typename T>
+class Future;
+
+///Used when future is resolved in callbacks. Just extends Future object by some extra information
+/**
+ * Primarily used to identify the context in which the callback is called. The
+ * object has one constant boolean variable, which is initialized depend on whether
+ * the callback is called in context resolving thread or registering thread.
+ *
+ * @see FutureResolved::nested
+ */
+template<typename T>
+class FutureResolved;
+
 template<typename T>
 class Future {
 public:
@@ -115,7 +138,7 @@ public:
 	 * You can use get() function to read value.
 	 */
 	template<typename Fn>
-	auto operator>>(Fn &&fn) -> typename _details::FutureCBBuilder<decltype(fn(std::declval<Future>()))>::RetValue {
+	auto operator>>(Fn &&fn) -> typename _details::FutureCBBuilder<decltype(fn(std::declval<Future>()))>::RetValue const {
 		using RetVal = decltype(fn(std::declval<Future>()));
 		return _details::FutureCBBuilder<RetVal>::build(std::forward<Fn>(fn), [&](auto &&fn){
 			addCallback(fn);
@@ -131,23 +154,27 @@ public:
 	 *
 	 * @param val value to set
 	 */
-	void resolve(const T &val);
-	///Resolves the future with value
-	/** @note function is not MT safe
-	 *
-	 * @param val value to set
-	 */
-	void resolve(T &&val);
+	template<typename X>
+	void resolve(X &&val) const;
+
+
+	void resolve(T &&val) const;
 	///Rejects the future with an exception
-	void reject(const std::exception_ptr &exp);
+	void reject(const std::exception_ptr &exp) const;
 	///Waits for resolution
 	void wait() const;
+	///Waits for resolution
+	template<typename A,typename B>
+	bool wait_for(const std::chrono::duration<A,B> &period) const;
+	///Waits for resolution
+	template<typename A,typename B>
+	bool wait_until(const std::chrono::time_point<A,B> &t) const;
 	///Returns true, when future is already resolved
 	bool resolved() const;
 
 	class Callback {
 	public:
-		virtual void call(const Future &fut) noexcept = 0;
+		virtual void call(const FutureResolved<T> &fut) noexcept = 0;
 		virtual ~Callback() {};
 		Callback *next = nullptr;
 	};
@@ -156,24 +183,60 @@ public:
 
 protected:
 
+	using Semaphore = _details::FutureSemaphore;
+
 	class State: public RefCntObj {
 	public:
+		//contains value when future is resolved
 		std::optional<T> value;
+		//contains exception when future is rejected
 		std::exception_ptr exception;
-		std::atomic<Callback *> callbacks;
+		//contains true, when future is resolved
+		/* Note, the content of value/exception is not defined, if the value is false.
+		 * Once the future is resolved, this variable is set to true
+		 */
+		volatile std::atomic_bool resolved = false;
+		//Contains all registered callbacks
+		volatile std::atomic<Callback *> callbacks = nullptr;
+		//Contains pointer to a semaphore, which controls waiting threads
+		/*This variable is set to nullptr during initialization. The first incomming thread
+		 * creates the semaphore instance and sets the pointer (atomically), and starts
+		 * to waiting on it. Other threads can wait as well. The semaphore is opened
+		 * when future is resolved
+		 */
+		volatile std::atomic<Semaphore *> semaphore = nullptr;
 		~State();
 	};
 
-	static constexpr Callback * resolved_ptr = reinterpret_cast<Callback *>(std::intptr_t(-1));
 
 	using PState = ondra_shared::RefCntPtr<State>;
 
 	PState state;
 	template<typename Fn>
-	void addCallback(Fn &fn);
-	void flushCallbacks();
+	void addCallback(Fn &fn) const;
+	void flushCallbacks(const Callback *cb) const;
+	Semaphore *installSemaphore() const;
 };
 
+
+template<typename T>
+class FutureResolved: public Future<T> {
+public:
+	FutureResolved(const Future<T> &f, bool nested);
+
+	///Contains information about the context
+	/**
+	 * If this variable is false, then callback is called in context of resolving thread.
+	 * So the thread which made registration could already continue in his work, and
+	 * the callback is detached from its stack.
+	 *
+	 * If this variable is true, then callback is called in context of registration thread.
+	 * This happen, when the registration is made on already resolved future. The registration
+	 * thread is blocked until the callback is finished.
+	 *
+	 */
+	const bool nested;
+};
 
 template<typename T>
 Future<T>::Future(const T &value):state (new State) {
@@ -192,37 +255,68 @@ Future<T>::Future(const std::exception_ptr &exp):state(new State) {
 
 template<typename T>
 bool Future<T>::resolved() const {
-	return state->value.has_value() || state->exception != nullptr;
+	return state->resolved.load();
+}
+
+namespace _details {
+
+	template<typename T>
+	class ResolveBy {
+	public:
+		template<typename X>
+		static void resolve(const Future<X> &fut, const T &val) {
+			fut.resolve(static_cast<X>(val));
+		}
+	};
+
+	template<typename T>
+	class ResolveBy<Future<T> > {
+	public:
+		template<typename X>
+		static void resolve(const Future<X> &fut, const Future<T> &val) {
+			val >> [f = Future<X>(fut)](const Future<T> &v) {
+				f.resolve(static_cast<X>(v.get()));
+			};
+		}
+	};
+
+	template<>
+	class ResolveBy<std::exception_ptr> {
+	public:
+		template<typename X>
+		static void resolve(const Future<X> &fut, const std::exception_ptr &ptr) {
+			fut.reject(ptr);
+		}
+	};
+
 }
 
 template<typename T>
-void Future<T>::resolve(const T &val) {
+void Future<T>::resolve(T &&val) const {
 	if (!resolved()) {
 		state->value = val;
-		flushCallbacks();
+		flushCallbacks(nullptr);
 	}
 }
 
 template<typename T>
-void Future<T>::resolve(T &&val) {
-	if (!resolved()) {
-		state->value.emplace(std::move(val));
-		flushCallbacks();
-	}
+template<typename X>
+void Future<T>::resolve(X &&val) const {
+	_details::ResolveBy<X>::resolve(*this, std::forward<X>(val));
 }
 
 template<typename T>
-void Future<T>::reject(const std::exception_ptr &exp) {
+void Future<T>::reject(const std::exception_ptr &exp) const {
 	if (!resolved()) {
 		state->exception = exp;
-		flushCallbacks();
+		flushCallbacks(nullptr);
 	}
 }
 
 
 template<typename T>
 template<typename Fn>
-inline void Future<T>::addCallback(Fn &fn) {
+inline void Future<T>::addCallback(Fn &fn) const {
 	class CB: public Callback {
 	public:
 		Fn fn;
@@ -231,22 +325,17 @@ inline void Future<T>::addCallback(Fn &fn) {
 			fn(fut);
 		}
 	};
-	Callback *nx = resolved;
-	if (state->callbacks.compare_exchange_string(resolved, nullptr)) {
-		fn(*this);
-		flushCallbacks();
-	} else {
-		CB *p = new CB(std::move(fn));
-		do {
-			if (nx == resolved_ptr) {
-				p->next = nullptr;
-				if (state->callbacks.compare_exchange_strong(nx, p)) {
-					flushCallbacks();
-					return;
-				}
-			}
-			p->next = nx;
-		} while (!state->callbacks.compare_exchange_weak(nx, p));
+
+	if (state->resolved.load()) {
+		fn(FutureResolved<T>(*this,true));
+	}
+	CB *p = new CB(std::move(fn));
+	Callback *nx = state->callbacks.load();
+	do {
+		p->next = nx;
+	} while (!state->callbacks.compare_exchange_strong(nx, p));
+	if (state->resolved.load()) {
+		flushCallbacks(p);
 	}
 }
 
@@ -256,18 +345,31 @@ inline Future<T>::Future(T &&value):state (new State) {
 }
 
 template<typename T>
-inline void Future<T>::flushCallbacks() {
+inline void Future<T>::flushCallbacks(const Callback *cb) const {
+	state->resolved.store(true);
+	_details::FutureSemaphore *s = state->semaphore.load();
+	if (s != nullptr) {
+		s->cond.notify_all();
+	}
 	Callback *z = nullptr;
-	do {
-		state->callbacks.exchange(z);
-		while (z && z != resolved_ptr) {
-			Callback *p = z;
-			z = z->next;
-			p->call(*this);
-			delete p;
-		}
-	} while (!state->callbacks.compare_exchange_weak(z, resolved_ptr));
+	state->callbacks.exchange(z);
+	while (z) {
+		Callback *p = z;
+		z = z->next;
+		p->call(FutureResolved<T>(*this,p == cb));
+		delete p;
+	}
+
 }
+
+template<typename RetVal>
+struct FutureReturnT { using T = Future<std::remove_reference_t<RetVal> >;};
+template<typename RetVal>
+struct FutureReturnT<Future<RetVal> > { using T = Future<RetVal>;};
+template<>
+struct FutureReturnT<void> { using T = void;};
+
+template<typename RetVal> using FutureReturn = typename FutureReturnT<RetVal>::T;
 
 
 #endif /* SRC_SHARED_FUTURE_H_ */
@@ -318,10 +420,14 @@ inline typename _details::FutureCBBuilder<void>::RetVal _details::FutureCBBuilde
 template<typename T>
 inline Future<T>::State::~State() {
 	auto p = callbacks.exchange(nullptr);
-	while (p && p != resolved_ptr) {
+	while (p) {
 		auto z = p;
 		p = p->next;
 		delete z;
+	}
+	if (semaphore.load() != nullptr) {
+		_details::FutureSemaphore *x = semaphore;
+		delete x;
 	}
 }
 
@@ -336,6 +442,66 @@ const T &Future<T>::get() const {
 	}
 	return state->value.get();
 }
+
+template<typename T>
+inline typename Future<T>::Semaphore* Future<T>::installSemaphore() const {
+	Semaphore *x = state->semaphore.load();
+	if (x == nullptr) {
+		Semaphore *z = new Semaphore;
+		if (state->semaphore.compare_exchange_strong(x, z)) {
+			x = z;
+		} else {
+			delete z;
+		}
+	} else {
+	}
+	return x;
+}
+
+
+template<typename T>
+template<typename A, typename B>
+inline bool Future<T>::wait_for(const std::chrono::duration<A, B> &period) const {
+	bool res;
+	if (!resolved()) {
+		Semaphore *sem = installSemaphore();
+		res = sem->cond.wait_for(sem->mx, period, [&]{return resolved();});
+		sem->mx.unlock();
+	} else {
+		res = true;
+	}
+	return res;
+}
+
+template<typename T>
+template<typename A, typename B>
+inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const {
+	bool res;
+	if (!resolved()) {
+		Semaphore *sem = installSemaphore();
+		res = sem->cond.wait_until(sem->mx, t, [&]{return resolved();});
+		sem->mx.unlock();
+	} else {
+		res = true;
+	}
+	return res;
+}
+
+template<typename T>
+void Future<T>::wait() const {
+	if (!resolved()) {
+		Semaphore *sem = installSemaphore();
+		sem->cond.wait(sem->mx, [&]{return resolved();});
+		sem->mx.unlock();
+	}
+}
+
+template<typename T>
+inline FutureResolved<T>::FutureResolved(const Future<T> &f, bool nested):Future<T>(f),nested(nested)
+
+{
+}
+
 
 
 }

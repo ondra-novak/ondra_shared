@@ -349,8 +349,7 @@ public:
 		template<typename Fn>
 		auto operator>>(Fn &&fn) {
 			using FnRetType = std::remove_reference_t<decltype(fn())>;
-			using Builder = typename _details::FutureCBBuilder<FnRetType>::RetVal;
-			return at_impl(std::move(fn), std::is_same<Builder, void>());
+			return at_impl(std::move(fn), std::is_same<FnRetType, void>());
 		}
 
 		template<typename Fn>
@@ -361,13 +360,12 @@ public:
 		template<typename Fn>
 		auto at_impl(Fn &&fn, std::false_type &&) {
 			using FnRetType = std::remove_reference_t<decltype(fn())>;
-			using Builder = typename _details::FutureCBBuilder<FnRetType>;
-			std::size_t id;
-			auto fut = Builder::build(std::move(fn),[&](auto &&f2){
-				id = sch.impl->at(tp, std::move(f2));
+			using FutRet = FutureReturn<FnRetType>;
+			FutRet fut;
+			auto id = sch.impl->at(tp, [fut, fn = std::move(fn)]() {
+				fut.resolve(fn());
 			});
-			return FutureWithID<typename Builder::RetVal>(std::move(fut), id);
-
+			return FutureWithID<FutRet>(std::move(fut), id);
 		}
 
 
