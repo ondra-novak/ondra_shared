@@ -372,7 +372,6 @@ struct FutureReturnT<void> { using T = void;};
 template<typename RetVal> using FutureReturn = typename FutureReturnT<RetVal>::T;
 
 
-#endif /* SRC_SHARED_FUTURE_H_ */
 
 
 template<typename T>
@@ -440,7 +439,7 @@ const T &Future<T>::get() const {
 		std::rethrow_exception(state->exception);
 		throw;
 	}
-	return state->value.get();
+	return *state->value;
 }
 
 template<typename T>
@@ -491,8 +490,8 @@ template<typename T>
 void Future<T>::wait() const {
 	if (!resolved()) {
 		Semaphore *sem = installSemaphore();
-		sem->cond.wait(sem->mx, [&]{return resolved();});
-		sem->mx.unlock();
+		std::unique_lock _(sem->mx);
+		sem->cond.wait(_, [&]{return resolved();});
 	}
 }
 
@@ -506,3 +505,5 @@ inline FutureResolved<T>::FutureResolved(const Future<T> &f, bool nested):Future
 
 }
 
+
+#endif /* SRC_SHARED_FUTURE_H_ */
