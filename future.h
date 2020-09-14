@@ -205,6 +205,17 @@ protected:
 		 * when future is resolved
 		 */
 		volatile std::atomic<Semaphore *> semaphore = nullptr;
+		//Contains count of waiting threads on semaphore
+		/* This allows to free semaphore when it is no longer needed
+		 * Each thread:
+		 *    1. check for resolve status
+		 *    2. increases "waiting"
+		 *    3. intialize semaphore is needed
+		 *    4. waits on semaphore until the future is resolved
+		 *    5. decreases the "waiting"
+		 *    6. if "waiting" is zero, removes the semaphore
+		 */
+		volatile std::atomic<unsigned int> waiting = 0;
 		~State();
 	};
 
@@ -216,6 +227,7 @@ protected:
 	void addCallback(Fn &fn) const;
 	void flushCallbacks(const Callback *cb) const;
 	Semaphore *installSemaphore() const;
+	void uninstallSemaphore() const;
 };
 
 
@@ -424,8 +436,8 @@ inline Future<T>::State::~State() {
 		p = p->next;
 		delete z;
 	}
-	if (semaphore.load() != nullptr) {
-		_details::FutureSemaphore *x = semaphore;
+	_details::FutureSemaphore *x = semaphore.load();
+	if (x != nullptr) {
 		delete x;
 	}
 }
@@ -463,9 +475,13 @@ template<typename A, typename B>
 inline bool Future<T>::wait_for(const std::chrono::duration<A, B> &period) const {
 	bool res;
 	if (!resolved()) {
+		++state->waiting;
 		Semaphore *sem = installSemaphore();
-		res = sem->cond.wait_for(sem->mx, period, [&]{return resolved();});
-		sem->mx.unlock();
+		std::unique_lock _(sem->mx);
+		res = sem->cond.wait_for(_, period, [&]{return resolved();});
+		if (--state->waiting == 0&& res) {
+			uninstallSemaphore();
+		}
 	} else {
 		res = true;
 	}
@@ -477,9 +493,13 @@ template<typename A, typename B>
 inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const {
 	bool res;
 	if (!resolved()) {
+		++state->waiting;
 		Semaphore *sem = installSemaphore();
-		res = sem->cond.wait_until(sem->mx, t, [&]{return resolved();});
-		sem->mx.unlock();
+		std::unique_lock _(sem->mx);
+		res = sem->cond.wait_until(_, t, [&]{return resolved();});
+		if (--state->waiting == && res) {
+			uninstallSemaphore();
+		}
 	} else {
 		res = true;
 	}
@@ -489,9 +509,21 @@ inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const 
 template<typename T>
 void Future<T>::wait() const {
 	if (!resolved()) {
+		++state->waiting;
 		Semaphore *sem = installSemaphore();
 		std::unique_lock _(sem->mx);
 		sem->cond.wait(_, [&]{return resolved();});
+		if (--state->waiting == 0) {
+			uninstallSemaphore();
+		}
+	}
+}
+
+template<typename T>
+void Future<T>::uninstallSemaphore() const {
+	_details::FutureSemaphore *x = state->semaphore.exchange(nullptr);
+	if (x != nullptr) {
+		delete x;
 	}
 }
 
