@@ -36,10 +36,10 @@ public:
 	 * @param msg function which is executed at given point
 	 * @return identifier, which can be used to remove scheduled event
 	 */
-	virtual std::size_t at(const TimePoint &tp, const Msg &msg)	= 0;
+	virtual std::size_t at(const TimePoint &tp, Msg &&msg)	= 0;
 
 	///Schedule repeating event
-	virtual std::size_t each(const Duration &tp, const Msg &msg)	= 0;
+	virtual std::size_t each(const Duration &tp, Msg &&msg)	= 0;
 
 	///Removes scheduled event
 	/**
@@ -73,7 +73,7 @@ public:
 	 * @note Immediate message is called as soon as code returns the control to the scheduler.
 	 * Also note that immediate message cannot be removed
 	 */
-	virtual void immediate(const Msg &msg) = 0;
+	virtual void immediate(Msg &&msg) = 0;
 
 	///destructor
 	virtual ~AbstractScheduler() {}
@@ -142,7 +142,7 @@ public:
 			std::size_t id;
 
 			ScheduledItem(const TimePoint &tp,const Duration &interval
-					,const Msg &msg, std::size_t id):tp(tp),interval(interval),msg(msg),id(id) {}
+					,Msg &&msg, std::size_t id):tp(tp),interval(interval),msg(std::move(msg)),id(id) {}
 		};
 
 		struct LessScheduledItem {
@@ -218,26 +218,26 @@ public:
 			});
 		}
 
-		virtual std::size_t at(const TimePoint &tp, const Msg &msg) override {
+		virtual std::size_t at(const TimePoint &tp, Msg &&msg) override {
 			std::size_t id = ++idcounter;
 			SchQueue *q = queue;
-			dispatcher->dispatch([itm = ScheduledItem(tp,Duration::zero(),msg,id),q]{
+			dispatcher->dispatch([itm = ScheduledItem(tp,Duration::zero(),std::move(msg),id),q]{
 				q->push(itm);
 			});
 			return id;
 		}
 
-		virtual std::size_t each(const Duration &dur, const Msg &msg) override {
+		virtual std::size_t each(const Duration &dur, Msg &&msg) override {
 			std::size_t id = ++idcounter;
 			TimePoint tp = Clock::now()+dur;
 			SchQueue *q = queue;
-			dispatcher->dispatch([itm = ScheduledItem(tp,dur,msg,id),q]{
+			dispatcher->dispatch([itm = ScheduledItem(tp,dur,std::move(msg),id),q]{
 				q->push(itm);
 			});
 			return id;
 		}
 
-		virtual void immediate(const Msg &msg) override {
+		virtual void immediate(Msg &&msg) override {
 			dispatcher->dispatch(msg);
 		}
 
@@ -313,7 +313,7 @@ public:
 				ScheduledItem itm (q.pop_top());
 				itm.msg();
 				if (itm.interval > z) {
-					q.push(ScheduledItem(curTime+itm.interval,itm.interval,itm.msg,itm.id));
+					q.push(ScheduledItem(curTime+itm.interval,itm.interval,std::move(itm.msg),itm.id));
 				}
 			}
 			return TimePoint::max();
@@ -349,12 +349,12 @@ public:
 		template<typename Fn>
 		auto operator>>(Fn &&fn) {
 			using FnRetType = std::remove_reference_t<decltype(fn())>;
-			return at_impl(std::move(fn), std::is_same<FnRetType, void>());
+			return at_impl(std::forward<Fn>(fn), std::is_same<FnRetType, void>());
 		}
 
 		template<typename Fn>
 		std::size_t at_impl(Fn &&fn, std::true_type &&) {
-			return sch.impl->at(tp, std::move(fn));
+			return sch.impl->at(tp, std::forward<Fn>(fn));
 		}
 
 		template<typename Fn>
@@ -362,7 +362,7 @@ public:
 			using FnRetType = std::remove_reference_t<decltype(fn())>;
 			using FutRet = FutureReturn<FnRetType>;
 			FutRet fut;
-			auto id = sch.impl->at(tp, [fut, fn = std::move(fn)]() {
+			auto id = sch.impl->at(tp, [fut, fn = std::forward<Fn>(fn)]() {
 				fut.resolve(fn());
 			});
 			return FutureWithID<FutRet>(std::move(fut), id);
@@ -380,7 +380,7 @@ public:
 
 		template<typename Fn>
 		std::size_t operator>>(Fn &&fn) {
-			return sch.impl->each(dur,std::remove_reference_t<Fn>(fn));
+			return sch.impl->each(dur,std::forward<Fn>(fn));
 		}
 
 		SchedulerT sch;
@@ -394,7 +394,7 @@ public:
 
 		template<typename Fn>
 		void operator>>(Fn &&fn) {
-			return sch.impl->immediate(std::remove_reference_t<Fn>(fn));
+			return sch.impl->immediate(std::forward<Fn>(fn));
 		}
 
 		SchedulerT sch;

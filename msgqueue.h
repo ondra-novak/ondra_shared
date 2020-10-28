@@ -38,7 +38,7 @@ public:
 	 * @retval false there were no message
 	 */
 	template<typename Fn>
-	bool try_pump(Fn fn);
+	bool try_pump(Fn &&fn);
 
 	///Pumps one message or block the thread
 	/**
@@ -50,7 +50,7 @@ public:
 	 * @note only one message is processed
 	 */
 	template<typename Fn>
-	void pump(Fn fn);
+	void pump(Fn &&fn);
 
 	///Pumps one message or blocks the thread for the given period of the time
 	/**
@@ -61,7 +61,7 @@ public:
 	 * @retval false there were no message and timeout ellapsed
 	 */
 	template< typename Duration, class Fn>
-	bool pump_for(Duration && rel_time, Fn fn);
+	bool pump_for(Duration && rel_time, Fn &&fn);
 
 	///Pumps one message or blocks the thread for the given period of the time
 	/**
@@ -72,7 +72,7 @@ public:
 	 * @retval false there were no message and timeout ellapsed
 	 */
 	template< typename TimePoint, class Fn >
-	bool pump_until(TimePoint && timeout_time,Fn pred );
+	bool pump_until(TimePoint && timeout_time,Fn &&pred );
 
 
 	///Allows to modify content of the queue.
@@ -82,7 +82,7 @@ public:
 	 * @param fn function called to modify the queue.
 	 */
 	template<typename Fn>
-	void modifyQueue(Fn fn);
+	void modifyQueue(Fn &&fn);
 
 	void clear();
 
@@ -126,7 +126,7 @@ inline bool MsgQueue<Msg, QueueImpl>::empty() const{
 
 template<typename Msg, typename QueueImpl>
 template<typename Fn>
-inline bool MsgQueue<Msg, QueueImpl>::try_pump(Fn fn) {
+inline bool MsgQueue<Msg, QueueImpl>::try_pump(Fn &&fn) {
 	Sync _(lock);
 	if (queue.empty()) return false;
 	Msg ret (std::move(queue.front()));
@@ -138,7 +138,7 @@ inline bool MsgQueue<Msg, QueueImpl>::try_pump(Fn fn) {
 
 template<typename Msg, typename QueueImpl>
 template<typename Fn>
-inline void MsgQueue<Msg, QueueImpl>::pump(Fn fn) {
+inline void MsgQueue<Msg, QueueImpl>::pump(Fn &&fn) {
 	Sync _(lock);
 	condvar.wait(_, [&]{return !queue.empty();});
 	Msg ret (std::move(queue.front()));
@@ -150,7 +150,7 @@ inline void MsgQueue<Msg, QueueImpl>::pump(Fn fn) {
 template<typename Msg, typename QueueImpl>
 template<typename Duration, class Fn>
 inline bool MsgQueue<Msg, QueueImpl>::pump_for(
-		Duration&& rel_time, Fn fn) {
+		Duration&& rel_time, Fn &&fn) {
 	Sync _(lock);
 	if (!condvar.wait_for(_, std::forward<Duration>(rel_time), [&]{return !queue.empty();})) return false;
 	Msg ret (std::move( queue.front()));
@@ -163,7 +163,7 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_for(
 template<typename Msg, typename QueueImpl>
 template<typename TimePoint,  class Fn>
 inline bool MsgQueue<Msg, QueueImpl>::pump_until(
-		TimePoint &&timeout_time, Fn fn) {
+		TimePoint &&timeout_time, Fn &&fn) {
 	Sync _(lock);
 	if (!condvar.wait_until(_, std::forward<TimePoint>(timeout_time), [&]{return !queue.empty();})) return false;
 	Msg ret(std::move(queue.front()));
@@ -175,7 +175,7 @@ inline bool MsgQueue<Msg, QueueImpl>::pump_until(
 
 template<typename Msg, typename QueueImpl>
 template<typename Fn>
-inline void MsgQueue<Msg, QueueImpl>::modifyQueue(Fn fn) {
+inline void MsgQueue<Msg, QueueImpl>::modifyQueue(Fn &&fn) {
 	Sync _(lock);
 	fn(queue);
 	condvar.notify_one();
