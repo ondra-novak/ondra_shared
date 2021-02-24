@@ -9,7 +9,7 @@
 #define ONDRA_SHARED_CMDLINE_H_20190238102938109
 #include <string>
 #include <iostream>
-#include <experimental/filesystem>
+#include <filesystem>
 #include <optional>
 
 namespace ondra_shared {
@@ -25,7 +25,7 @@ public:
 		initNextArg();
 	}
 
-	std::experimental::filesystem::path getProgramFullPath() const;
+	std::filesystem::path getProgramFullPath() const;
 
 
 	///Returns true, if no more arguments reached.
@@ -115,8 +115,8 @@ inline CmdArgIter parseCmdLine(int argc, char **argv) {
 	return CmdArgIter(argv[0],argc-1, argv+1);
 }
 
-inline std::experimental::filesystem::path CmdArgIter::getProgramFullPath() const {
-	using namespace std::experimental::filesystem;
+inline std::filesystem::path CmdArgIter::getProgramFullPath() const {
+	using namespace std::filesystem;
 	if (arg0[0] == '/') return arg0;
 	auto p = current_path();
 	return p/arg0;
