@@ -114,7 +114,22 @@ public:
 	 */
 	Future(const std::exception_ptr &exp);
 
+	enum Undefined {undefined};
 
+	///Construct undefined future
+	/**
+	 * Undefined future is marked as undefined. It means, that value of future is not
+	 * defined and will not be defined in future. You can test this state by calling
+	 * defined() function. Note that undefined future cannot be used otherwise then
+	 * calling that function. Because its state is undefined. Accessing undefined future
+	 * can cause null pointer dereference
+	 *
+	 */
+	Future(Undefined);
+
+	///Determines whether future is defined
+	/** By default, future is defined unless it is constructed with undefined state. */
+	bool defined() const;
 
 	///Attach the callback function to the future
 	/**
@@ -205,17 +220,6 @@ protected:
 		 * when future is resolved
 		 */
 		volatile std::atomic<Semaphore *> semaphore = nullptr;
-		//Contains count of waiting threads on semaphore
-		/* This allows to free semaphore when it is no longer needed
-		 * Each thread:
-		 *    1. check for resolve status
-		 *    2. increases "waiting"
-		 *    3. intialize semaphore is needed
-		 *    4. waits on semaphore until the future is resolved
-		 *    5. decreases the "waiting"
-		 *    6. if "waiting" is zero, removes the semaphore
-		 */
-		volatile std::atomic<unsigned int> waiting = 0;
 		~State();
 	};
 
@@ -264,6 +268,11 @@ template<typename T>
 Future<T>::Future(const std::exception_ptr &exp):state(new State) {
 	reject(exp);
 }
+
+template<typename T>
+Future<T>::Future(Undefined):state (nullptr) {
+}
+
 
 template<typename T>
 bool Future<T>::resolved() const {
@@ -475,13 +484,9 @@ template<typename A, typename B>
 inline bool Future<T>::wait_for(const std::chrono::duration<A, B> &period) const {
 	bool res;
 	if (!resolved()) {
-		++state->waiting;
 		Semaphore *sem = installSemaphore();
 		std::unique_lock _(sem->mx);
 		res = sem->cond.wait_for(_, period, [&]{return resolved();});
-		if (--state->waiting == 0&& res) {
-			uninstallSemaphore();
-		}
 	} else {
 		res = true;
 	}
@@ -493,13 +498,9 @@ template<typename A, typename B>
 inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const {
 	bool res;
 	if (!resolved()) {
-		++state->waiting;
 		Semaphore *sem = installSemaphore();
 		std::unique_lock _(sem->mx);
 		res = sem->cond.wait_until(_, t, [&]{return resolved();});
-		if (--state->waiting == && res) {
-			uninstallSemaphore();
-		}
 	} else {
 		res = true;
 	}
@@ -509,13 +510,9 @@ inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const 
 template<typename T>
 void Future<T>::wait() const {
 	if (!resolved()) {
-		++state->waiting;
 		Semaphore *sem = installSemaphore();
 		std::unique_lock _(sem->mx);
 		sem->cond.wait(_, [&]{return resolved();});
-		if (--state->waiting == 0) {
-			uninstallSemaphore();
-		}
 	}
 }
 
@@ -525,6 +522,11 @@ void Future<T>::uninstallSemaphore() const {
 	if (x != nullptr) {
 		delete x;
 	}
+}
+
+template<typename T>
+bool Future<T>::defined() const {
+	return state != nullptr;
 }
 
 template<typename T>
