@@ -152,8 +152,8 @@ class SharedObject {
 		const Ret &operator*() const {return subj->get();}
 		explicit operator const Ret *() const {return &subj->get();}
 		const Ret *operator->() const {return &subj->get();}
-		bool operator==(nullptr_t) const {return subj == nullptr;}
-		bool operator!=(nullptr_t) const {return subj != nullptr;}
+		bool operator==(std::nullptr_t) const {return subj == nullptr;}
+		bool operator!=(std::nullptr_t) const {return subj != nullptr;}
 		template<typename B>
 		bool operator==(const Lock<B> &oth) const {return subj == oth.subj;}
 		template<typename B>
@@ -185,7 +185,7 @@ public:
 	SharedObject() {}
 	///Create empty unassigned instance
 	/**If you need to construct instance, use make() */
-	SharedObject(nullptr_t) {}
+	SharedObject(std::nullptr_t) {}
 
 	SharedObject(const PSubj &sub):subj(sub) {}
 
@@ -194,13 +194,13 @@ public:
 	 * @retval true is null
 	 * @retval false not null
 	 */
-	bool operator==(nullptr_t) const {return subj == nullptr;}
+	bool operator==(std::nullptr_t) const {return subj == nullptr;}
 	///test for null
 	/**
 	 * @retval false is null
 	 * @retval true not null
 	 */
-	bool operator!=(nullptr_t) const {return subj != nullptr;}
+	bool operator!=(std::nullptr_t) const {return subj != nullptr;}
 	///Compare two shared objects
 	/**
 	 * @param other object

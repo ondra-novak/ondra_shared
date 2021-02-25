@@ -497,7 +497,7 @@ inline bool Future<T>::wait_until(const std::chrono::time_point<A, B> &t) const 
 		Semaphore *sem = installSemaphore();
 		std::unique_lock _(sem->mx);
 		res = sem->cond.wait_until(_, t, [&]{return resolved();});
-		if (--state->waiting == && res) {
+		if (--state->waiting == 0 && res) {
 			uninstallSemaphore();
 		}
 	} else {
