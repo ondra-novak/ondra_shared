@@ -21,8 +21,8 @@ public:
 	IniConfig config;
 	PStdLogProviderFactory logProvider;
 	std::optional<CmdArgIter> args;
-	std::experimental::filesystem::path appPath;
-	std::experimental::filesystem::path configPath;
+	std::filesystem::path appPath;
+	std::filesystem::path configPath;
 	const char *config_default_name = nullptr;
 	const char *help_banner = nullptr;
 	const char *log_section = "log";
@@ -59,7 +59,7 @@ public:
 					Switch{'f',"config",[&](CmdArgIter&args){
 						configPath=args.getNext();
 						if (configPath.is_relative())
-							configPath = std::experimental::filesystem::current_path() / configPath;
+							configPath = std::filesystem::current_path() / configPath;
 					},"<config_file> specify path to configuration file"}
 			};
 			ptr_default_switches = &default_switches;
@@ -70,7 +70,7 @@ public:
 
 			if (!res) return false;
 
-			config.load(configPath);
+			config.load(configPath.string());
 			auto logcfg = config[log_section];
 			logProvider = StdLogFileRotating::create(
 							verbose?std::string(""):logcfg["file"].getPath(""),
@@ -95,7 +95,7 @@ public:
 		configPath.remove_filename();
 		configPath /= "..";
 		configPath /= "conf";
-		configPath /= (config_default_name?config_default_name:appPath.filename().string().append(".conf").c_str());
+		configPath /= (config_default_name?config_default_name:appPath.stem().string().append(".conf").c_str());
 
 
 

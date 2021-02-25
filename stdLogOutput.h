@@ -111,7 +111,11 @@ inline void StdLogProvider::appendDate(std::time_t now) {
 	auto wrfn = [&](char c) { buffer.push_back(c);};
 
 	std::tm tinfo;
+#ifdef _WIN32
+	gmtime_s(&tinfo, &now);
+#else
 	gmtime_r(&now, &tinfo);
+#endif
 
 	unsignedToString(tinfo.tm_year+1900, wrfn, 10,4);
 	buffer.push_back('-');

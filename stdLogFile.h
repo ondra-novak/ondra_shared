@@ -142,7 +142,7 @@ public:
 	}
 
 	virtual void writeToLog(const StrViewA &line, const std::time_t &t, LogLevel) override {
-		unsigned int d = t/rotate_interval;
+		unsigned int d = static_cast<unsigned int>(t/rotate_interval);
 		if (d != day_num) {
 			outfile.close();
 			day_num = readLastDayNumber();
