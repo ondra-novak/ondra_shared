@@ -109,6 +109,13 @@ public:
 		}
 	}
 
+	static void renameFile(const char* src, const char* trg) {
+#if _WIN32
+		MoveFileExA(src, trg, MOVEFILE_REPLACE_EXISTING);
+#else
+		std::rename(src, trg);
+#endif
+	}
 
 	void doRotate() {
 		std::string n1;
@@ -117,9 +124,9 @@ public:
 		for (int i = rotate_count; i > 1; i--) {
 			std::swap(n2,n1);
 			appendNumber(n2,i-1);
-			std::rename(n2.c_str(),n1.c_str());
+			renameFile(n2.c_str(),n1.c_str());
 		}
-		std::rename(pathname.c_str(),n2.c_str());
+		renameFile(pathname.c_str(),n2.c_str());
 
 	}
 

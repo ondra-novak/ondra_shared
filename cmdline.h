@@ -9,7 +9,7 @@
 #define ONDRA_SHARED_CMDLINE_H_20190238102938109
 #include <string>
 #include <iostream>
-#include <filesystem>
+#include "filesystem.h"
 #include <optional>
 
 namespace ondra_shared {
