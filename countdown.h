@@ -144,11 +144,6 @@ public:
 	int operator++(int) {return inc() - 1;}
 	int operator--(int) {return dec() + 1;}
 
-	///deprecated function for compatibility
-	bool zeroWait(unsigned int timeout_ms) {return wait(timeout_ms);}
-	///deprecated function for compatibility
-	void zeroWait() {return wait();}
-
 protected:
 	mutable std::mutex mtx;
 	std::condition_variable waiter;
