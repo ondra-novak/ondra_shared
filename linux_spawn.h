@@ -164,6 +164,60 @@ public:
 		return {FD(tmp[0]), FD(tmp[1])};
 	}
 
+	///Spawns command line
+	/** Command line contains process name (with path) followed by arguments separated by white spaces
+	 * If a white space must be part of argument, the whole argument must be enclosed to quoted. You
+	 * can also use backslash to escape quotes or white spaces
+	 *
+	 *
+	 *
+	 * @param workDir
+	 * @param cmd_line
+	 * @return
+	 */
+	static ExternalProcess spawn_cmdline(std::string workDir, std::string cmd_line) {
+		std::vector<std::string> args;
+		std::string buff;
+		bool qt = false;
+		bool sl = false;
+		bool wqt = false;
+		for (char c: cmd_line) {
+			if (sl) {
+				switch(c) {
+				case 'n': buff.push_back('\n');break;
+				case 'r': buff.push_back('\r');break;
+				case 't': buff.push_back('\t');break;
+				case 'a': buff.push_back('\a');break;
+				case 'b': buff.push_back('\b');break;
+				case '0': buff.push_back('\0');break;
+				default: buff.push_back(c);
+				}
+				sl = false;
+			}
+			else if (isspace(c)) {
+				if (qt) buff.push_back(c);
+				else if (!buff.empty() || wqt) {
+					args.push_back(buff);
+					buff.clear();
+					wqt =false;
+				}
+			} else if (c == '"') {
+				qt = !qt;
+				wqt = true;
+			} else {
+				buff.push_back(c);
+			}
+		}
+		if (!buff.empty() || wqt) {
+			args.push_back(buff);
+		}
+		if (args.empty()) throw std::runtime_error("ExternalProcess: - given empty command line");
+		std::string pgmname ( std::move(args[0]));
+		args.erase(args.begin());
+		return spawn(workDir, pgmname, args);
+	}
+
+
 	static ExternalProcess spawn(std::string workDir,
 			std::string execPath, std::vector<std::string> params) {
 
