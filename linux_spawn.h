@@ -239,21 +239,25 @@ public:
 			throw Exception(errno, "Fork failed");
 		} else if (frk == 0) {
 			try {
-				chdir(workDir.c_str());
+				if (!chdir(workDir.c_str())) throw Exception(errno, "chdir");
 				if (dup2(proc_input.read, 0)<0) throw Exception(errno, "dup->stdin");
 				if (dup2(proc_output.write, 1)<0) throw Exception(errno, "dup->stdout");
 				if (dup2(proc_error.write, 2)<0) throw Exception(errno, "dup->stderr");
 				execvp(arglist[0], arglist);
 				throw Exception(errno, "execlp");
 			} catch (Exception &e) {
-				write(proc_control.write,&e.errnr, sizeof(e.errnr));
-				write(proc_control.write,e.desc.c_str(), e.desc.length());
+				int r1 = write(proc_control.write,&e.errnr, sizeof(e.errnr));
+				int r2 = write(proc_control.write,e.desc.c_str(), e.desc.length());
+				(void)r1;
+				(void)r2;
 
 			} catch (std::exception &e) {
 				const char *w = e.what();
 				int er = 0;
-				write(proc_control.write,&er, sizeof(er));
-				write(proc_control.write, w, strlen(w));
+				int r1 = write(proc_control.write,&er, sizeof(er));
+				int r2 = write(proc_control.write, w, strlen(w));
+				(void)r1;
+				(void)r2;
 			}
 			exit(0);
 			throw;
