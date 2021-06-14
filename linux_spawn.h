@@ -239,7 +239,7 @@ public:
 			throw Exception(errno, "Fork failed");
 		} else if (frk == 0) {
 			try {
-				if (!chdir(workDir.c_str())) throw Exception(errno, "chdir");
+				if (chdir(workDir.c_str())) throw Exception(errno, "chdir");
 				if (dup2(proc_input.read, 0)<0) throw Exception(errno, "dup->stdin");
 				if (dup2(proc_output.write, 1)<0) throw Exception(errno, "dup->stdout");
 				if (dup2(proc_error.write, 2)<0) throw Exception(errno, "dup->stderr");
