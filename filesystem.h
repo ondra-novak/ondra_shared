@@ -5,6 +5,9 @@
  *      Author: ondra
  */
 
+#ifdef __clang__
+#include <filesystem>
+#else
 #ifdef __GNUC__
 #if __GNUC__ < 8
 #include <experimental/filesystem>
@@ -17,4 +20,4 @@ namespace std {
 #else
 #include <filesystem>
 #endif
-
+#endif

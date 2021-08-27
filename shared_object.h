@@ -95,7 +95,7 @@ public:
 			virtual bool release() const noexcept override {return src->release();}
 			virtual bool isShared() const override {return src->isShared();}
 			virtual long use_count() const noexcept override {return src->use_count();}
-			virtual S *clone(K *ptr) const {return new S(src, ptr);}
+			virtual S *clone(K *ptr) const override {return new S(src, ptr);}
 			S(const RefCntPtr<Z> &src, K *obj):Storage(obj),src(src) {}
 
 		protected:
