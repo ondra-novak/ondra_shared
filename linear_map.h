@@ -7,6 +7,7 @@
 
 #ifndef ONDRA_SHARED_LINEAR_MAP_H_24867654568
 #define ONDRA_SHARED_LINEAR_MAP_H_24867654568
+#include <stdexcept>
 #include "linear_set.h"
 
 namespace ondra_shared {
