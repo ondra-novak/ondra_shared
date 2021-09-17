@@ -26,7 +26,7 @@ public:
 	}
 
 	void sendToLog(const StrViewA &line, const std::time_t &time, LogLevel level) {
-		std::lock_guard<std::mutex> _(lock);
+		std::lock_guard<std::recursive_mutex> _(lock);
 		writeToLog(line, time, level);
 	}
 
@@ -43,7 +43,7 @@ public:
 
 
 protected:
-	std::mutex lock;
+	std::recursive_mutex lock;
 	LogLevel enabledLevel;
 
 };
