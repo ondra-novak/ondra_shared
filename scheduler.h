@@ -480,6 +480,7 @@ public:
 
 	///clears scheduler's variable which decrements count of references
 	void clear() {
+		impl->removeAll();
 		impl = nullptr;
 	}
 
