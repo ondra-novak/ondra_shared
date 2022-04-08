@@ -49,7 +49,7 @@ public:
 		StrViewA getCurPath(StrViewA defval) const;
 		std::size_t getUInt(std::size_t default_value) const;
 		bool getBool(bool default_value) const;
-		std::intptr_t getInt(std::size_t default_value) const;
+		std::intptr_t getInt(std::intptr_t default_value) const;
 		double getNumber(double default_value) const;
 		StrViewA getString(const StrViewA &default_value) const;
 		const char *c_str(const char *default_value) const;
@@ -433,7 +433,7 @@ inline std::size_t IniConfig::Value::getUInt(std::size_t default_value) const {
 
 }
 
-inline std::intptr_t IniConfig::Value::getInt(std::size_t default_value) const {
+inline std::intptr_t IniConfig::Value::getInt(std::intptr_t default_value) const {
 	if (defined()) return getInt();
 	else return default_value;
 }
