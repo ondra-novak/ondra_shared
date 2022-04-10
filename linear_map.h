@@ -44,7 +44,7 @@ public:
 	using value_compare = Compare;
 
 	void clear() {
-		return dset.clear();
+		dset.clear();
 	}
 
 	std::pair<iterator,bool> insert( const value_type& value ) {
@@ -55,10 +55,10 @@ public:
 	}
 	template< class InputIt >
 	void insert( InputIt first, InputIt last ) {
-		return dset.insert(first,last);
+		dset.insert(first,last);
 	}
 	void insert( std::initializer_list<value_type> ilist ) {
-		return dset.insert(ilist);
+		dset.insert(ilist);
 	}
 
 	template< class... Args >
@@ -169,7 +169,7 @@ public:
 	}
 
 	void reserve(std::size_t sz) {
-		return dset.reserve(sz);
+		dset.reserve(sz);
 	}
 	std::size_t capacity() const {
 		return dset.capacity();

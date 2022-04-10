@@ -180,8 +180,6 @@ public:
 		}
 
 		BasicScheduler(_Install) {
-				this->queue = nullptr;
-				this->dispatcher = nullptr;
 		}
 
 
@@ -321,8 +319,8 @@ public:
 
 
 
-		SchQueue *queue;
-		Dispatcher *dispatcher;
+		SchQueue *queue = nullptr;
+		Dispatcher *dispatcher = nullptr;
 		std::atomic<std::size_t> idcounter;
 		int nestcnt = 0;
 
@@ -394,7 +392,7 @@ public:
 
 		template<typename Fn>
 		void operator>>(Fn &&fn) {
-			return sch.impl->immediate(std::forward<Fn>(fn));
+			sch.impl->immediate(std::forward<Fn>(fn));
 		}
 
 		SchedulerT sch;

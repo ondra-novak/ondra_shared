@@ -87,11 +87,11 @@ public:
 
 		class S: public Storage {
 		public:
-			virtual void lock() const override {return src->lock();}
-			virtual void unlock() const override {return src->unlock();}
-			virtual void lock_shared() const override {return src->lock_shared();}
-			virtual void unlock_shared() const override {return src->unlock_shared();}
-			virtual void addRef() const noexcept  override {return src->addRef();}
+			virtual void lock() const override { src->lock();}
+			virtual void unlock() const override {src->unlock();}
+			virtual void lock_shared() const override {src->lock_shared();}
+			virtual void unlock_shared() const override {src->unlock_shared();}
+			virtual void addRef() const noexcept  override {src->addRef();}
 			virtual bool release() const noexcept override {return src->release();}
 			virtual bool isShared() const override {return src->isShared();}
 			virtual long use_count() const noexcept override {return src->use_count();}

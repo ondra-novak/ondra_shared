@@ -33,6 +33,7 @@ public:
 		const char *long_sw;
 		std::function<void(CmdArgIter &)> handler;
 		const char *help;
+		const char *args = nullptr;
 	};
 
 	DefaultApp(const std::initializer_list<Switch> &switches,
@@ -138,6 +139,8 @@ public:
 		int spaceReq = 8;
 		for (auto &&sw:switches) {
 			std::size_t len = std::strlen(sw.long_sw);
+			std::size_t args = sw.args?std::strlen(sw.args)+1:0;
+			len+=args;
 			spaceReq = std::max<int>(len, spaceReq);
 		}
 
@@ -150,9 +153,11 @@ public:
 			if (sw.long_sw) output << "--" << sw.long_sw << " ";
 			else output << "   ";
 
+			if (sw.args) output << sw.args << " ";
+
 			output << " ";
 
-			for (int i = spaceReq-(sw.long_sw?std::strlen(sw.long_sw):0); i > 0; --i) {
+			for (int i = spaceReq-(sw.long_sw?std::strlen(sw.long_sw):0)-(sw.args?std::strlen(sw.args)+1:0); i > 0; --i) {
 				output.put(' ');
 			}
 
@@ -168,7 +173,7 @@ public:
 	}
 
 	void wordwrap(const char *text, int swspace = 0) {
-		int linelen = 65-swspace;
+		int linelen = 75-swspace;
 		if (linelen < 0) linelen = 0;
 		int l = linelen;
 		while (*text) {
