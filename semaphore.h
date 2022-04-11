@@ -20,18 +20,6 @@ public:
 
 	Semaphore(unsigned int count):counter(count) {}
 
-
-	bool wait(unsigned int timeout_ms) {
-		std::unique_lock<std::mutex> _(mtx);
-		if (counter == 0) {
-			if (!waiter.wait_for(_,std::chrono::milliseconds(timeout_ms), [=]{return counter > 0;})) {
-				return false;
-			}
-		}
-		--counter;
-		return true;
-	}
-
 	void wait() {
 		std::unique_lock<std::mutex> _(mtx);
 		waiter.wait(_,[=]{return counter > 0;});
@@ -82,6 +70,13 @@ public:
 
 	void unlock() {
 		operator++();
+	}
+
+	bool try_lock() {
+		std::unique_lock<std::mutex> _(mtx);
+		if (counter == 0) return false;
+		--counter;
+		return true;
 	}
 
 	void signal() {
