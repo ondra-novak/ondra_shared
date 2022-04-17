@@ -467,6 +467,10 @@ class LogObjectT {
 			std::swap(cur,lp);
 		}
 
+		void swap(LogObjectT &other) {
+			std::swap(other.lp,lp);
+		}
+
 		///Creates section where specified LogObject has the log provider swapped with thread local provider
 		/** for more information, see swap()
 		 *
