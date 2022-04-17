@@ -151,6 +151,17 @@ public:
 	shared_function(shared_function &&other):fn(std::move(other.fn)) {}
 	shared_function() {}
 
+	shared_function &operator=(const shared_function &other) {
+		this->fn = other.fn;
+		return *this;
+	}
+
+	shared_function &operator=(shared_function &&other) {
+		this->fn = std::move(other.fn);
+		return *this;
+	}
+
+
 	bool operator==(const shared_function &other) const {return fn == other.fn;}
 	bool operator!=(const shared_function &other) const {return fn != other.fn;}
 	bool operator>=(const shared_function &other) const {return fn >= other.fn;}
