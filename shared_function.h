@@ -21,8 +21,8 @@ namespace ondra_shared {
 
 
 namespace _details {
-	template<typename T> struct ForceReference;
-	template<typename T> using ForceReference_t = typename ForceReference<T>::type;
+    template<typename T> struct ForceReference;
+    template<typename T> using ForceReference_t = typename ForceReference<T>::type;
 
 
 	template<typename Base>
