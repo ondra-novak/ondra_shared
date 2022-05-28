@@ -13,7 +13,7 @@ namespace ondra_shared {
 
 ///Constructs a trailer object
 /**
- * Trailer object allows to scheduler a function call to the end of the current scope.
+ * Trailer object allows to schedule a function call to the end of the current scope.
  *
  * To use this function correctly, declare a variable by using 'auto' declarator
  *
@@ -21,7 +21,7 @@ namespace ondra_shared {
  * auto t = trailer([]{ ... code executed at end of the scope ...});
  * @endcode
  *
- * The instance itself allows to add further trailes or cancel the trailer as needed
+ * The instance itself allows to add further trailers or cancel the trailer as needed
  *
  * @param fn function/lambda to be scheduled <void()>
  * @return Trailer object

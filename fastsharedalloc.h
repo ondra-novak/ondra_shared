@@ -42,8 +42,10 @@ class FastSharedAlloc {
     };
 
     struct BlockBase2: public BlockBase {
-        static constexpr BlockBase dummy = {};
-        static constexpr BlockBase const *shutdown_flag = &dummy;
+        static constexpr BlockBase dummy_shutdown = {};
+        static constexpr BlockBase dummy_busy = {};
+        static constexpr BlockBase const *shutdown_flag = &dummy_shutdown;
+        static constexpr BlockBase const *busy_flag = &dummy_busy;
     };
 
     template<int level>
@@ -60,41 +62,71 @@ class FastSharedAlloc {
         using BlkPtr = Blk *;
 
         void *alloc() {
-            BlkPtr nx = blk_stack.load();
-            BlkPtr out;
-            do {
-                if (nx == Blk::shutdown_flag || nx == nullptr) {
-                    return ::operator new(Blk::blk_size);
+            //lock the queue - putting busy flag there
+            BlkPtr busy_flg = static_cast<BlkPtr>(const_cast<BlockBase *>(BlockBase2::busy_flag));
+            //also unshare current chain (so nobody will access it)
+            BlkPtr nx = blk_stack.exchange(busy_flg);
+            //if we got the busy_flag, queue is already locked, wait until unlocked - spinlock
+            while (nx == busy_flg) {
+                //put busy flag to the queue and receive content
+                nx = blk_stack.exchange(busy_flg);
+            }
+            //if received shutdown flag or nullptr
+            if (nx ==Blk::shutdown_flag || nx == nullptr) {
+                //put it back (if there is still busy_flg)
+                blk_stack.compare_exchange_strong(busy_flg, nx);
+                //do standard allocation
+                return ::operator new(Blk::blk_size);
+            }
+            //store top most block
+            BlkPtr out = nx;
+            //make new root (of next)
+            nx = out->next;
+            //put the new root to the top - there should be busy flag a the time;
+            if (!blk_stack.compare_exchange_strong(busy_flg, nx)) {
+                //if there were something else, we cannot put rest of list back
+                //free rest of blocks
+                while (nx) {
+                    BlkPtr d = nx;
+                    nx = nx->next;
+                    ::operator delete(d);
                 }
-                out = nx;
-
-                //NOTE - this can cause invalid dereference error
-                //when racing thread allocates and then deallocates
-                //block faster, while allocator is shut down at the same time
-
-                nx = nx->next;
-            } while (!blk_stack.compare_exchange_weak(nx, out));
+            }
+            //return our block
             return out;
         }
 
         void free(void *ptr) {
+            //convert ptr to block
             BlkPtr p = reinterpret_cast<BlkPtr>(ptr);
+            //load top of chain
             p->next = blk_stack.load();;
-            if (p->next == Blk::shutdown_flag) {
-                ::operator delete(ptr);
-                return;
-            }
-            while(!blk_stack.compare_exchange_weak(p->next, p)) {
+            do {
+                //if top is shutdown, we need to deallocate by operator
                 if (p->next == Blk::shutdown_flag) {
                     ::operator delete(ptr);
                     return;
                 }
-            }
+                //if top is busy, we must wait in spin lock, so replace next with nullptr
+                if (p->next == Blk::busy_flag) {
+                    p->next = nullptr;
+                }
+                //try to replace top with out block
+            } while(!blk_stack.compare_exchange_weak(p->next, p));
         }
 
-        BlkPtr shutdown() {
+        void shutdown() {
             BlkPtr sht = const_cast<BlkPtr>(static_cast<const Blk *>(Blk::shutdown_flag));
-            return blk_stack.exchange(sht);
+            BlkPtr x = blk_stack.exchange(sht);
+            //if we received busy_flag - some other thread is responsible to free the chain
+            if (x != Blk::busy_flag || x != Blk::shutdown_flag) {
+                while (x) {
+                    BlkPtr z = x;
+                    x=x->next;
+                    ::operator delete(z);
+                }
+            }
+
         }
 
         void restart() {
@@ -102,13 +134,6 @@ class FastSharedAlloc {
             blk_stack.compare_exchange_strong(sht, nullptr);
         }
 
-        static void freeChain(BlkPtr x) {
-            while (x) {
-                BlkPtr z = x;
-                x=x->next;
-                ::operator delete(z);
-            }
-        }
 
     protected:
         std::atomic<BlkPtr> blk_stack;
@@ -165,26 +190,8 @@ class FastSharedAlloc {
         ///shutdown allocator
         /** Method itself is not MT safe, it is MT safe relative to alloc/dealloc */
         void shutdown() {
-            void *chains[16];
-            //collect all chains and shutdown caches
             for (int i = 0; i < 16; i++) {
-                chooseChain(i+1, [&](auto &c){chains[i] = c.shutdown();});
-            }
-            //this order was choosen to minimize possibility of a race condition.
-            //It there is racing thread allocating
-            //a block, it can still receive block from chain, before the chain is shut down. The
-            //received block still have a valid next pointer for a while. It is expected, that racing
-            //thread fails to compare_exchange and finds chain shutted down.
-
-            //during shutdown, memory fence is issued many times
-
-            //After all chains are shutted down, release the rest of memory
-            for (int i = 0; i < 16; i++) {
-                chooseChain(i+1, [&](auto &c) {
-                    using T = typename std::remove_reference<decltype(c)>::type;
-                    using Ptr = typename T::BlkPtr;
-                    T::freeChain(reinterpret_cast<Ptr>(chains[i]));
-                });
+                chooseChain(i+1, [&](auto &c){c.shutdown();});
             }
         }
 
