@@ -9,6 +9,8 @@
 #define SRC_ONDRA_SHARED_CALLBACK_H_78946548694984654
 
 #include <memory>
+#include <typeinfo>
+
 #include "fastsharedalloc.h"
 
 namespace ondra_shared {
@@ -52,6 +54,8 @@ public:
 
     ///Construct empty callback object. You can assign later
     Callback() {}
+    ///Assign nullptr to callback creates unitialized callback
+    Callback(std::nullptr_t) {}
     ///Object is not copieable
     Callback(const Callback &other) = delete;
     ///You can move object
@@ -75,7 +79,7 @@ public:
      * @param args function arguments
      * @return function result
      */
-    R operator()(FastParam<Args>  ... args);
+    R operator()(FastParam<Args>  ... args) const;
 
     ///Test whether function is assigned
     bool operator==(std::nullptr_t) const {return ptr == nullptr;}
@@ -89,7 +93,7 @@ protected:
 
     class AbstractCall:public FastSharedAlloc {
     public:
-        virtual R call(Callback &me, FastParam<Args>  ... args) const = 0;
+        virtual R call(Callback &me, FastParam<Args>  ... args)  = 0;
         virtual ~AbstractCall() {}
     };
 
@@ -103,8 +107,8 @@ protected:
     public:
         FnCall(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 
-        virtual R call(Callback &, FastParam<Args>  ... args) const override {
-            return fn(args...);
+        virtual R call(Callback &, FastParam<Args>  ... args) override {
+            return fn(std::forward<FastParam<Args> >(args)...);
         }
 
     protected:
@@ -116,7 +120,7 @@ protected:
     public:
         FnCallWithMe(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 
-        virtual R call(Callback &me, FastParam<Args>  ... args) const override {
+        virtual R call(Callback &me, FastParam<Args>  ... args) override {
             return fn(me, args...);
         }
 
@@ -165,8 +169,12 @@ Callback<R(Args...)>::Callback(Fn &&fn)
 {}
 
 template<typename R, typename ... Args>
-R Callback<R(Args...)>::operator()(FastParam<Args> ... args) {
-    return ptr->call(*this, args...);
+R Callback<R(Args...)>::operator()(FastParam<Args> ... args) const {
+    if (ptr) {
+        return ptr->call(*const_cast<Callback *>(this), std::forward<FastParam<Args> >(args)...);
+    } else {
+        throw std::runtime_error(std::string("Attempt to call unassigned callback: ").append(typeid(Callback).name()));
+    }
 }
 
 }

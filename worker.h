@@ -33,6 +33,8 @@ public:
 	///run the worker for current thread but doesn't wait for new messages
 	virtual void flush() noexcept	= 0;
 
+    virtual void clear() noexcept   = 0;
+
 
 	///destructor
 	virtual ~AbstractWorker() {}
@@ -130,6 +132,10 @@ public:
 			d->dispatch(std::move(msg));
 		}
 
+        virtual void clear() noexcept override   {
+            d->clear();
+        }
+
 		void addThread() {
 			newThread();
 		}
@@ -217,9 +223,8 @@ public:
 		wrk->dispatch(std::move(msg));
 	}
 
-	///Clears variable
-	/** If the worker as a single instance, it causes that worker is destroyed*/
-	void clear() {wrk = nullptr;}
+	///Clears variable queue
+	void clear() {wrk->clear(); wrk = nullptr;}
 
 	///Flushes worker's queue
 	/** Function should be called on workers without own thread. It process all messages

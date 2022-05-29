@@ -11,13 +11,13 @@
 #include <string>
 #include <fstream>
 
-#include "finally.h"
 
 
 #include "ini_parser.h"
 
 #include "stringpool.h"
 #include "virtualMember.h"
+#include "trailer.h"
 
 namespace ondra_shared {
 
@@ -227,7 +227,7 @@ template<typename Fn, typename D>
 inline void IniConfig::load(const Fn &fn, const StrViewA &path, D &&directives, const StrViewA &curSection) {
 
 	String prevPath = curPath;
-	auto f1 = finally([&]{curPath = prevPath;});
+	auto f1 = trailer([&]{curPath = prevPath;});
 
 	auto sep = path.lastIndexOf(pathSeparator);
 	if (sep != path.npos) {
