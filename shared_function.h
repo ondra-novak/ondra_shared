@@ -25,36 +25,36 @@ namespace _details {
     template<typename T> using ForceReference_t = typename ForceReference<T>::type;
 
 
-	template<typename Base>
-	class lambda_state_base_t: public Base {
-	public:
-		template <typename ... Types, std::size_t ... Indices>
-		lambda_state_base_t(const std::tuple<Types...> &tuple, std::index_sequence<Indices...>)
-			:Base(std::get<Indices>(tuple)...) {}
+     template<typename Base>
+     class lambda_state_base_t: public Base {
+     public:
+          template <typename ... Types, std::size_t ... Indices>
+          lambda_state_base_t(const std::tuple<Types...> &tuple, std::index_sequence<Indices...>)
+               :Base(std::get<Indices>(tuple)...) {}
 
 
-	};
+     };
 
 
 
-	template<typename Base, typename ... Args>
-	class lambda_state_t: public lambda_state_base_t<Base> {
-	public:
-		lambda_state_t(_details::ForceReference_t<Args> ... args)
-			:lambda_state_base_t<Base>(std::tuple<Args...>(std::forward<Args>(args)...),std::index_sequence_for<Args...>())
-			,params(std::forward<_details::ForceReference_t<Args> >(args)...) {}
+     template<typename Base, typename ... Args>
+     class lambda_state_t: public lambda_state_base_t<Base> {
+     public:
+          lambda_state_t(_details::ForceReference_t<Args> ... args)
+               :lambda_state_base_t<Base>(std::tuple<Args...>(std::forward<Args>(args)...),std::index_sequence_for<Args...>())
+               ,params(std::forward<_details::ForceReference_t<Args> >(args)...) {}
 
-		lambda_state_t(const lambda_state_t &other)
-			:lambda_state_base_t<Base>(other.params, std::index_sequence_for<Args...>())
-			,params(params) {}
+          lambda_state_t(const lambda_state_t &other)
+               :lambda_state_base_t<Base>(other.params, std::index_sequence_for<Args...>())
+               ,params(params) {}
 
-		lambda_state_t(lambda_state_t &&other)
-			:lambda_state_base_t<Base>(other.params, std::index_sequence_for<Args...>())
-			,params(std::move(params)) {}
+          lambda_state_t(lambda_state_t &&other)
+               :lambda_state_base_t<Base>(other.params, std::index_sequence_for<Args...>())
+               ,params(std::move(params)) {}
 
-	protected:
-		std::tuple<Args...> params;
-	};
+     protected:
+          std::tuple<Args...> params;
+     };
 
 }
 
@@ -88,7 +88,7 @@ namespace _details {
  */
 template<typename T, typename ... Args>
 auto lambda_state(Args && ... args) {
-	return _details::lambda_state_t<T, Args ... >(std::forward<Args>(args)...);
+     return _details::lambda_state_t<T, Args ... >(std::forward<Args>(args)...);
 }
 
 ///Shared function is function shared to many places, while it maintains its internal state
@@ -110,94 +110,94 @@ template<typename Ret, typename ... Args>
 class shared_function<Ret(Args...)> {
 private:
 
-	class FnWrapBase: public RefCntObj {
-	public:
-		virtual Ret call(const shared_function &self, _details::ForceReference_t<Args> ...args) const = 0;
-		virtual ~FnWrapBase() {}
-	};
+     class FnWrapBase: public RefCntObj {
+     public:
+          virtual Ret call(const shared_function &self, _details::ForceReference_t<Args> ...args) const = 0;
+          virtual ~FnWrapBase() {}
+     };
 
 
-	template<typename Fn>
-	class FnWrap: public FnWrapBase {
-	public:
+     template<typename Fn>
+     class FnWrap: public FnWrapBase {
+     public:
 
-		typedef std::remove_reference_t<Fn> RFn;
+          typedef std::remove_reference_t<Fn> RFn;
 
-		FnWrap(Fn &&fn):fn(std::forward<Fn>(fn)) {}
-		virtual Ret call(const shared_function &self, _details::ForceReference_t<Args> ...args) const {
-			return static_cast<Ret>(call2(self,std::forward<_details::ForceReference_t<Args> >(args)...));
-		}
+          FnWrap(Fn &&fn):fn(std::forward<Fn>(fn)) {}
+          virtual Ret call(const shared_function &self, _details::ForceReference_t<Args> ...args) const {
+               return static_cast<Ret>(call2(self,std::forward<_details::ForceReference_t<Args> >(args)...));
+          }
 
-		template<typename ... X>
-		auto call2(const shared_function &self, X && ...args) const -> decltype(std::declval<RFn>()(std::forward<X>(args)...)) {
-			return fn(std::forward<X>(args)...);
-		}
+          template<typename ... X>
+          auto call2(const shared_function &self, X && ...args) const -> decltype(std::declval<RFn>()(std::forward<X>(args)...)) {
+               return fn(std::forward<X>(args)...);
+          }
 
-		template<typename ... X>
-		auto call2(const shared_function &self, X && ...args) const-> decltype(std::declval<RFn>()(self,std::forward<X>(args)...)) {
-			return fn(self,std::forward<X>(args)...);
-		}
+          template<typename ... X>
+          auto call2(const shared_function &self, X && ...args) const-> decltype(std::declval<RFn>()(self,std::forward<X>(args)...)) {
+               return fn(self,std::forward<X>(args)...);
+          }
 
-	protected:
-		mutable std::remove_reference_t<Fn> fn;
-	};
+     protected:
+          mutable std::remove_reference_t<Fn> fn;
+     };
 
 public:
 
-	template<typename T>
-	shared_function(T &&fn):fn(new FnWrap<T>(std::forward<T>(fn))) {}
-	shared_function(const shared_function &other):fn(other.fn) {}
-	shared_function(shared_function &other):fn(other.fn) {}
-	shared_function(shared_function &&other):fn(std::move(other.fn)) {}
-	shared_function() {}
+     template<typename T>
+     shared_function(T &&fn):fn(new FnWrap<T>(std::forward<T>(fn))) {}
+     shared_function(const shared_function &other):fn(other.fn) {}
+     shared_function(shared_function &other):fn(other.fn) {}
+     shared_function(shared_function &&other):fn(std::move(other.fn)) {}
+     shared_function() {}
 
-	shared_function &operator=(const shared_function &other) {
-		this->fn = other.fn;
-		return *this;
-	}
+     shared_function &operator=(const shared_function &other) {
+          this->fn = other.fn;
+          return *this;
+     }
 
-	shared_function &operator=(shared_function &&other) {
-		this->fn = std::move(other.fn);
-		return *this;
-	}
+     shared_function &operator=(shared_function &&other) {
+          this->fn = std::move(other.fn);
+          return *this;
+     }
 
 
-	bool operator==(const shared_function &other) const {return fn == other.fn;}
-	bool operator!=(const shared_function &other) const {return fn != other.fn;}
-	bool operator>=(const shared_function &other) const {return fn >= other.fn;}
-	bool operator<=(const shared_function &other) const {return fn <= other.fn;}
-	bool operator>(const shared_function &other) const {return fn > other.fn;}
-	bool operator<(const shared_function &other) const {return fn < other.fn;}
+     bool operator==(const shared_function &other) const {return fn == other.fn;}
+     bool operator!=(const shared_function &other) const {return fn != other.fn;}
+     bool operator>=(const shared_function &other) const {return fn >= other.fn;}
+     bool operator<=(const shared_function &other) const {return fn <= other.fn;}
+     bool operator>(const shared_function &other) const {return fn > other.fn;}
+     bool operator<(const shared_function &other) const {return fn < other.fn;}
 
-	bool operator==(std::nullptr_t) const {return fn == nullptr;}
-	bool operator!=(std::nullptr_t) const {return fn != nullptr;}
+     bool operator==(std::nullptr_t) const {return fn == nullptr;}
+     bool operator!=(std::nullptr_t) const {return fn != nullptr;}
 
-	bool operator!() const {return fn == nullptr;}
+     bool operator!() const {return fn == nullptr;}
 
-	Ret operator()(_details::ForceReference_t<Args> ... args) const {
-		if (fn == nullptr) throw std::bad_function_call();
-		return fn->call(*this,std::forward<_details::ForceReference_t<Args> >(args)...);
-	}
+     Ret operator()(_details::ForceReference_t<Args> ... args) const {
+          if (fn == nullptr) throw std::bad_function_call();
+          return fn->call(*this,std::forward<_details::ForceReference_t<Args> >(args)...);
+     }
 
 protected:
-	RefCntPtr<FnWrapBase> fn;
+     RefCntPtr<FnWrapBase> fn;
 
 
 };
 
 namespace _details {
-	template<typename T> struct ForceReference {
-		typedef const T &type;
-	};
-	template<typename T> struct ForceReference<T &> {
-		typedef T &type;
-	};
-	template<typename T> struct ForceReference<T &&> {
-		typedef T &&type;
-	};
-	template<typename T> struct ForceReference<T *> {
-		typedef T *type;
-	};
+     template<typename T> struct ForceReference {
+          typedef const T &type;
+     };
+     template<typename T> struct ForceReference<T &> {
+          typedef T &type;
+     };
+     template<typename T> struct ForceReference<T &&> {
+          typedef T &&type;
+     };
+     template<typename T> struct ForceReference<T *> {
+          typedef T *type;
+     };
 
 }
 

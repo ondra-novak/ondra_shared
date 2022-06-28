@@ -17,13 +17,13 @@ namespace ondra_shared {
 template <typename Fnc, typename ... Types, std::size_t ... Indices>
 auto apply_impl(Fnc &&fnc, const std::tuple<Types...> &tuple, std::index_sequence<Indices...>)
 {
-	return std::forward<Fnc>(fnc)(std::get<Indices>(tuple)...);
+     return std::forward<Fnc>(fnc)(std::get<Indices>(tuple)...);
 }
 
 template <typename Fnc, typename ... Types>
 auto apply(Fnc &&fnc, const std::tuple<Types...> &tuple)
 {
-	return apply_impl(std::forward<Fnc>(fnc), tuple, std::index_sequence_for<Types...>());
+     return apply_impl(std::forward<Fnc>(fnc), tuple, std::index_sequence_for<Types...>());
 }
 
 

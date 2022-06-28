@@ -33,68 +33,68 @@ template<typename Type, std::size_t reserved>
 class VLA: public MutableStringView<Type> {
 public:
 
-	///Construct variable length array
-	/**
-	 *
-	 * @param count count of requested items
-	 */
-	template<typename ... Args>
-	VLA(std::size_t count, Args&& ... args)
-		:MutableStringView<Type>(alloc(this,count,std::forward<Args>(args) ...),count) {}
+     ///Construct variable length array
+     /**
+      *
+      * @param count count of requested items
+      */
+     template<typename ... Args>
+     VLA(std::size_t count, Args&& ... args)
+          :MutableStringView<Type>(alloc(this,count,std::forward<Args>(args) ...),count) {}
 
-	VLA(const StringView<Type> data):VLA(data.length) {
-		auto iter = this->begin();
-		for (auto &&item: data) {
-			*iter = item;
-			++iter;
-		}
-	}
+     VLA(const StringView<Type> data):VLA(data.length) {
+          auto iter = this->begin();
+          for (auto &&item: data) {
+               *iter = item;
+               ++iter;
+          }
+     }
 
 
-	///copying is disabled
-	VLA(const VLA &other) = delete;
-	///moving is disabled
-	VLA(VLA &&other) = delete;
-	VLA &operator=(const VLA &other) = delete;
-	VLA &operator=(VLA &&other) = delete;
+     ///copying is disabled
+     VLA(const VLA &other) = delete;
+     ///moving is disabled
+     VLA(VLA &&other) = delete;
+     VLA &operator=(const VLA &other) = delete;
+     VLA &operator=(VLA &&other) = delete;
 
-	~VLA() {
-		dealloc(this->data, this->length);
-	}
+     ~VLA() {
+          dealloc(this->data, this->length);
+     }
 
 
 protected:
-	unsigned char buffer[reserved*sizeof(Type)];
+     unsigned char buffer[reserved*sizeof(Type)];
 
-	template<typename ... Args>
-	static Type *alloc(VLA *me, std::size_t count,  Args&& ... args) {
-		Type * items;
-		if (count > reserved) {
-			items = reinterpret_cast<Type *>(operator new(sizeof(Type) * count));
-		} else {
-			items = reinterpret_cast<Type *>(me->buffer);
-		}
-		for (std::size_t i = 0; i < count; i++) {
-			try {
-				new(items+i) Type(std::forward<Args>(args) ...);
-			} catch (...) {
-				while (i > 0) {
-					--i;
-					items[i].~Type();
-				}
-				if (count > reserved) operator delete(items);
-				throw;
-			}
-		}
-		return items;
-	}
-	static void dealloc(Type *items, std::size_t count) {
-		for (auto i = count; i > 0;) {
-			--i;
-			items[i].~Type();
-		}
-		if (count > reserved) operator delete(items);
-	}
+     template<typename ... Args>
+     static Type *alloc(VLA *me, std::size_t count,  Args&& ... args) {
+          Type * items;
+          if (count > reserved) {
+               items = reinterpret_cast<Type *>(operator new(sizeof(Type) * count));
+          } else {
+               items = reinterpret_cast<Type *>(me->buffer);
+          }
+          for (std::size_t i = 0; i < count; i++) {
+               try {
+                    new(items+i) Type(std::forward<Args>(args) ...);
+               } catch (...) {
+                    while (i > 0) {
+                         --i;
+                         items[i].~Type();
+                    }
+                    if (count > reserved) operator delete(items);
+                    throw;
+               }
+          }
+          return items;
+     }
+     static void dealloc(Type *items, std::size_t count) {
+          for (auto i = count; i > 0;) {
+               --i;
+               items[i].~Type();
+          }
+          if (count > reserved) operator delete(items);
+     }
 
 };
 

@@ -15,19 +15,19 @@ namespace ondra_shared {
 template<typename TimePoint>
 class WorkerByScheduler: public AbstractWorker {
 public:
-	WorkerByScheduler(const SchedulerT<TimePoint> &sch):sch(sch) {}
+     WorkerByScheduler(const SchedulerT<TimePoint> &sch):sch(sch) {}
 
-	virtual void dispatch(Msg &&msg){
-		sch.immediate() >> std::move(msg);
-	}
-	virtual void run() noexcept	{}
-	virtual void flush() noexcept {
-		sch.sync();
-	}
+     virtual void dispatch(Msg &&msg){
+          sch.immediate() >> std::move(msg);
+     }
+     virtual void run() noexcept     {}
+     virtual void flush() noexcept {
+          sch.sync();
+     }
 
 
 protected:
-	SchedulerT<TimePoint> sch;
+     SchedulerT<TimePoint> sch;
 };
 
 
@@ -39,7 +39,7 @@ protected:
  */
 template<typename TimePoint>
 static Worker schedulerGetWorker(const SchedulerT<TimePoint> &sch) {
-	return Worker(new WorkerByScheduler<TimePoint>(sch));
+     return Worker(new WorkerByScheduler<TimePoint>(sch));
 }
 
 

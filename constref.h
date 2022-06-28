@@ -9,19 +9,19 @@ namespace _details {
 template<typename T>
 struct ConstRef {
 public:
-	typedef const T &Value;
+     typedef const T &Value;
 };
 
 template<typename T>
 struct ConstRef<T &> {
 public:
-	typedef T &Value;
+     typedef T &Value;
 };
 
 template<typename T>
 struct ConstRef<const T &> {
 public:
-	typedef const T &Value;
+     typedef const T &Value;
 };
 
 

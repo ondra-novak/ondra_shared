@@ -29,10 +29,10 @@ class output_adapter : public std::streambuf {
     output_adapter (Fn &&fn) : fn(std::move(fn)) {}
   protected:
     virtual int_type overflow (int_type c) override {
-    	if (c != EOF) {
-    		fn((char)c);
-    	}
-		return c;
+         if (c != EOF) {
+              fn((char)c);
+         }
+          return c;
     }
 };
 

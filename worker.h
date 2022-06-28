@@ -22,22 +22,22 @@ namespace ondra_shared {
 class AbstractWorker: public RefCntObj {
 public:
 
-	typedef Dispatcher::Msg Msg;
+     typedef Dispatcher::Msg Msg;
 
-	///dispatch the message
-	virtual void dispatch( Msg &&msg)	= 0;
+     ///dispatch the message
+     virtual void dispatch( Msg &&msg)     = 0;
 
-	///run the worker for current thread
-	virtual void run() noexcept	= 0;
+     ///run the worker for current thread
+     virtual void run() noexcept     = 0;
 
-	///run the worker for current thread but doesn't wait for new messages
-	virtual void flush() noexcept	= 0;
+     ///run the worker for current thread but doesn't wait for new messages
+     virtual void flush() noexcept     = 0;
 
     virtual void clear() noexcept   = 0;
 
 
-	///destructor
-	virtual ~AbstractWorker() {}
+     ///destructor
+     virtual ~AbstractWorker() {}
 };
 
 
@@ -75,8 +75,8 @@ template<typename T> class FutureExceptionalState;
  * @code
  * auto worker = Worker::create()
  * worker >> [=]{
- 	 	 int result = .. some calculation
- * 		return result;
+             int result = .. some calculation
+ *           return result;
  * } >> [=] (int res) {  //then
  *     //process result
  *
@@ -109,148 +109,148 @@ template<typename T> class FutureExceptionalState;
 class Worker {
 public:
 
-	typedef Dispatcher::Msg Msg;
+     typedef Dispatcher::Msg Msg;
 
-	///Create empty worker's variable
-	Worker() {}
-	///Initialize a worker's variable with custrom instance
-	explicit Worker(AbstractWorker *wrk):wrk(wrk) {}
+     ///Create empty worker's variable
+     Worker() {}
+     ///Initialize a worker's variable with custrom instance
+     explicit Worker(AbstractWorker *wrk):wrk(wrk) {}
 
-	class SharedDispatcher: public Dispatcher, public RefCntObj {
-	public:
-		~SharedDispatcher() {
-			run();
-		}
-	};
+     class SharedDispatcher: public Dispatcher, public RefCntObj {
+     public:
+          ~SharedDispatcher() {
+               run();
+          }
+     };
 
 
-	///Default worker implementation
-	class DefaultWorker: public AbstractWorker {
-	public:
+     ///Default worker implementation
+     class DefaultWorker: public AbstractWorker {
+     public:
 
-		virtual void dispatch(Msg &&msg) override	{
-			d->dispatch(std::move(msg));
-		}
+          virtual void dispatch(Msg &&msg) override     {
+               d->dispatch(std::move(msg));
+          }
 
         virtual void clear() noexcept override   {
             d->clear();
         }
 
-		void addThread() {
-			newThread();
-		}
+          void addThread() {
+               newThread();
+          }
 
-		DefaultWorker():d(new SharedDispatcher) {}
+          DefaultWorker():d(new SharedDispatcher) {}
 
-		~DefaultWorker() {
-			d->quit();
-		}
+          ~DefaultWorker() {
+               d->quit();
+          }
 
-		static void worker(RefCntPtr<SharedDispatcher> sd) {
-			sd->run();
-			sd->quit();
-		}
+          static void worker(RefCntPtr<SharedDispatcher> sd) {
+               sd->run();
+               sd->quit();
+          }
 
-		virtual void run() noexcept override {
-			worker(d);
-		}
+          virtual void run() noexcept override {
+               worker(d);
+          }
 
-		virtual void flush() noexcept override {
-			RefCntPtr<SharedDispatcher> sd(d);
-			while (!sd->empty()) {
-				if (!sd->pump()) {
-					sd->quit();
-					break;
-				}
-			}
-		}
+          virtual void flush() noexcept override {
+               RefCntPtr<SharedDispatcher> sd(d);
+               while (!sd->empty()) {
+                    if (!sd->pump()) {
+                         sd->quit();
+                         break;
+                    }
+               }
+          }
 
-	protected:
-		RefCntPtr<SharedDispatcher> d;
+     protected:
+          RefCntPtr<SharedDispatcher> d;
 
-		void newThread() {
+          void newThread() {
 
-			std::thread thr(std::bind(&worker,d));
-			thr.detach();
-		}
-	};
-
-
-	///Creates multithreaded worker
-	/**
-	 * @param threads count of desired threads. The parameter is 1, so the worker
-	 * is initialized with a single thread. If you set this argument to 0, then worker without
-	 * own thread is created. Such worker doesn't process its queue until the flush() is called.
-	 *
-	 * @return worker instance
-	 */
-	static Worker create(unsigned int threads = 1) {
-		RefCntPtr<DefaultWorker> w = new DefaultWorker;
-		for (unsigned int i = 0; i < threads; i++) w->addThread();
-		return Worker(RefCntPtr<AbstractWorker>::staticCast(w));
-	}
+               std::thread thr(std::bind(&worker,d));
+               thr.detach();
+          }
+     };
 
 
-	///Installs worker to the current thread
-	/**
-	 * By installing worker to current thread, the current thread is converted to worker.
-	 * This allows to have at least one worker without need to have threading library.
-	 *
-	 * @param fn Function called to initialize the worker. It receives Worker variable
-	 *
-	 * @note To uninstall worker, you need to decrement count of references of the
-	 * Worker's instance to zero. Once this is achieved, the program only needs to return
-	 * from the current function back to the worker.
-	 */
-	template<typename InitFn>
-	static void install(InitFn && fn) {
-		DefaultWorker *w = new DefaultWorker;
-		w->dispatch([=]{
-			fn(Worker(w));
-		});
-		w->run();
-	}
+     ///Creates multithreaded worker
+     /**
+      * @param threads count of desired threads. The parameter is 1, so the worker
+      * is initialized with a single thread. If you set this argument to 0, then worker without
+      * own thread is created. Such worker doesn't process its queue until the flush() is called.
+      *
+      * @return worker instance
+      */
+     static Worker create(unsigned int threads = 1) {
+          RefCntPtr<DefaultWorker> w = new DefaultWorker;
+          for (unsigned int i = 0; i < threads; i++) w->addThread();
+          return Worker(RefCntPtr<AbstractWorker>::staticCast(w));
+     }
 
 
-	///Returns true, if the variable contains a worker instance
-	bool defined() const {
-		return wrk != nullptr;
-	}
-
-	///dispatch a single function
-	/** calls the function in context of the worker */
-	void dispatch(Msg &&msg) const{
-		wrk->dispatch(std::move(msg));
-	}
-
-	///Clears variable queue
-	void clear() {wrk->clear(); wrk = nullptr;}
-
-	///Flushes worker's queue
-	/** Function should be called on workers without own thread. It process all messages
-	 * in the queue and returns when there is no unprocessed message. If the worker
-	 * as thread(s), this function temporary adds current thread to the pool of threads and
-	 * helps the queue.
-	 *
-	 * @note you should always call flush before the worker without own thread
-	 * is destroyed or detached, especially when worker is shared into many places. Without flushing,
-	 * the enqueued functions are not called resulting to many resource leaks
-	 *
-	 */
-	void flush() const {wrk->flush();}
-
-	///Converts current thread to worker's thread complete
-	void run() const {wrk->run();}
+     ///Installs worker to the current thread
+     /**
+      * By installing worker to current thread, the current thread is converted to worker.
+      * This allows to have at least one worker without need to have threading library.
+      *
+      * @param fn Function called to initialize the worker. It receives Worker variable
+      *
+      * @note To uninstall worker, you need to decrement count of references of the
+      * Worker's instance to zero. Once this is achieved, the program only needs to return
+      * from the current function back to the worker.
+      */
+     template<typename InitFn>
+     static void install(InitFn && fn) {
+          DefaultWorker *w = new DefaultWorker;
+          w->dispatch([=]{
+               fn(Worker(w));
+          });
+          w->run();
+     }
 
 
-	template<typename Fn>
-	void operator >> (Fn &&fn) const {
-		dispatch(std::forward<Fn>(fn));
-	}
+     ///Returns true, if the variable contains a worker instance
+     bool defined() const {
+          return wrk != nullptr;
+     }
+
+     ///dispatch a single function
+     /** calls the function in context of the worker */
+     void dispatch(Msg &&msg) const{
+          wrk->dispatch(std::move(msg));
+     }
+
+     ///Clears variable queue
+     void clear() {wrk->clear(); wrk = nullptr;}
+
+     ///Flushes worker's queue
+     /** Function should be called on workers without own thread. It process all messages
+      * in the queue and returns when there is no unprocessed message. If the worker
+      * as thread(s), this function temporary adds current thread to the pool of threads and
+      * helps the queue.
+      *
+      * @note you should always call flush before the worker without own thread
+      * is destroyed or detached, especially when worker is shared into many places. Without flushing,
+      * the enqueued functions are not called resulting to many resource leaks
+      *
+      */
+     void flush() const {wrk->flush();}
+
+     ///Converts current thread to worker's thread complete
+     void run() const {wrk->run();}
+
+
+     template<typename Fn>
+     void operator >> (Fn &&fn) const {
+          dispatch(std::forward<Fn>(fn));
+     }
 
 protected:
 
-	RefCntPtr<AbstractWorker> wrk;
+     RefCntPtr<AbstractWorker> wrk;
 
 };
 

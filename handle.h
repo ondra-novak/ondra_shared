@@ -21,55 +21,55 @@ namespace ondra_shared {
 template<typename T, typename CloseFn, CloseFn closeFn, const T *invval>
 class Handle {
 public:
-	Handle():h(*invval) {}
-	Handle(T &&h):h(std::move(h)) {}
-	Handle(const T &h):h(h) {}
-	Handle(Handle &&other):h(other.h) {other.h = *invval;}
-	Handle &operator=(Handle &&other) {
-		if (this != &other) {
-			close();
-			h = other.h;
-			other.h = *invval;
-		}
-		return *this;
-	}
-	operator T() const {return h;}
-	T get() const {return h;}
-	T operator->() const {return h;}
-	void close() {
-		if (!is_invalid())  closeFn(h);
-		h = *invval;
-	}
-	~Handle() {close();}
-	T detach() {T res = h; h = *invval; return res;}
-	bool is_invalid() const {return h == *invval;}
-	bool operator !() const {return is_invalid();}
+     Handle():h(*invval) {}
+     Handle(T &&h):h(std::move(h)) {}
+     Handle(const T &h):h(h) {}
+     Handle(Handle &&other):h(other.h) {other.h = *invval;}
+     Handle &operator=(Handle &&other) {
+          if (this != &other) {
+               close();
+               h = other.h;
+               other.h = *invval;
+          }
+          return *this;
+     }
+     operator T() const {return h;}
+     T get() const {return h;}
+     T operator->() const {return h;}
+     void close() {
+          if (!is_invalid())  closeFn(h);
+          h = *invval;
+     }
+     ~Handle() {close();}
+     T detach() {T res = h; h = *invval; return res;}
+     bool is_invalid() const {return h == *invval;}
+     bool operator !() const {return is_invalid();}
 
-	///Allow to init as pointer to value
-	/**Function also closes current handle and returns pointer to value */
-	T *init() {
-		close();
-		return &h;
-	}
-	const T *ptr() const {return &h;}
+     ///Allow to init as pointer to value
+     /**Function also closes current handle and returns pointer to value */
+     T *init() {
+          close();
+          return &h;
+     }
+     const T *ptr() const {return &h;}
 protected:
-	T h;
+     T h;
 };
 
 template<typename T>
 struct Handle_PointerTraits {
-	static T *null;
-	static void freefn(T *val) {free(static_cast<void *>(val));}
-	typedef void (*FreeFn)(T *);
+     static T *null;
+     static void freefn(T *val) {free(static_cast<void *>(val));}
+     typedef void (*FreeFn)(T *);
 };
 
 template<typename T> T *Handle_PointerTraits<T>::null = nullptr;
 
 ///C vanilla pointer, with many predefined values
 template<typename T,
-		 typename CloseFn = typename Handle_PointerTraits<T>::FreeFn,
-		 CloseFn closeFn = &Handle_PointerTraits<T>::freefn,
-		  T  *const*invval = &Handle_PointerTraits<T>::null>
+           typename CloseFn = typename Handle_PointerTraits<T>::FreeFn,
+           CloseFn closeFn = &Handle_PointerTraits<T>::freefn,
+            T  *const*invval = &Handle_PointerTraits<T>::null>
 using CPtr = Handle<T *, CloseFn, closeFn, invval>;
 
 

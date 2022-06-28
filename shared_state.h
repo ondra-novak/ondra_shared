@@ -35,16 +35,16 @@ public:
  *
  * class MyState: public SharedState::Object {
  * public:
- * 	 MyState(Worker worker, int val):worker(worker), sharedVal(val) {}
+ *       MyState(Worker worker, int val):worker(worker), sharedVal(val) {}
  *
  *   // contains function which works with shared state
  *   void operator()() {
  *      // example operation
  *      //
  *      // till sharedVal is above zero
- *   	if (--sharedVal > 0)
- *   	   // put self to the worker
- *   	   worker >> SharedState::reuse(this);
+ *        if (--sharedVal > 0)
+ *           // put self to the worker
+ *           worker >> SharedState::reuse(this);
  *   }
  *
  *   Worker worker;
@@ -57,7 +57,7 @@ public:
  * auto mystate = SharedState::make<MyState>(wrk, 1000);
  * //run task paralel on 4 threads
  * for (int i = 0; i < 4; i++) {
- * 		wrk >> mystate;
+ *           wrk >> mystate;
  * }
  *
  * @endcode
@@ -67,13 +67,13 @@ template<typename Object>
 class Fn: public RefCntPtr<Object> {
 public:
 
-	using RefCntPtr<Object>::RefCntPtr;
+     using RefCntPtr<Object>::RefCntPtr;
 
 
-	template<typename ... Args >
-	auto operator()(Args && ...args) const -> decltype((*std::declval<Object *>())(std::forward<Args>(args)...)) {
-		return this->ptr->operator()(std::forward<Args>(args)...);
-	}
+     template<typename ... Args >
+     auto operator()(Args && ...args) const -> decltype((*std::declval<Object *>())(std::forward<Args>(args)...)) {
+          return this->ptr->operator()(std::forward<Args>(args)...);
+     }
 };
 
 ///Constructs new shared state object
@@ -83,7 +83,7 @@ public:
  * @return shared state object, which can be passed to the worker
  */
 template<typename T, typename ... Args> static Fn<T> make(Args && ... args) {
-	return Fn<T>(new T(std::forward<Args>(args)...));
+     return Fn<T>(new T(std::forward<Args>(args)...));
 }
 ///Reuses shared state
 /**
@@ -92,7 +92,7 @@ template<typename T, typename ... Args> static Fn<T> make(Args && ... args) {
  * @return function which executes task on shared state
  */
 template<typename T> static Fn<T> reuse(T *obj) {
-	return Fn<T>(obj);
+     return Fn<T>(obj);
 }
 
 }

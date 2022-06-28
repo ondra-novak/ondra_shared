@@ -20,40 +20,40 @@ using namespace ondra_shared;
 
 int main(int argc, char **argv) {
 
-	Scheduler sch;
+     Scheduler sch;
 
-	Scheduler::install([&](Scheduler s){
-		sch = s;
+     Scheduler::install([&](Scheduler s){
+          sch = s;
 
-		auto repid = sch.each(0.3s) >> []{
-				std::cout << "called repeated action"<< std::endl;
-		};
+          auto repid = sch.each(0.3s) >> []{
+                    std::cout << "called repeated action"<< std::endl;
+          };
 
-		sch.after(1s) >> []{
-				std::cout << "called after 1 second"<< std::endl;
-		};
+          sch.after(1s) >> []{
+                    std::cout << "called after 1 second"<< std::endl;
+          };
 
-		sch.after(2s) >> []{
-				std::cout << "called after 2 second"<< std::endl;
-		} >> [&sch,repid]{
-			sch.immediate() >> []{
-					std::cout << "called immediate" << std::endl;
-			};
-			std::cout << "removed repeated action"<< std::endl;
-			sch.remove(repid);
-		};
-		sch.after(3s) >> []{
-				std::cout << "called after 3 second"<< std::endl;
-		};
+          sch.after(2s) >> []{
+                    std::cout << "called after 2 second"<< std::endl;
+          } >> [&sch,repid]{
+               sch.immediate() >> []{
+                         std::cout << "called immediate" << std::endl;
+               };
+               std::cout << "removed repeated action"<< std::endl;
+               sch.remove(repid);
+          };
+          sch.after(3s) >> []{
+                    std::cout << "called after 3 second"<< std::endl;
+          };
 
 
-		sch.after(4s) >> []{
-				std::cout << "called after 4 second"<< std::endl;
-		} >> ([&sch]{
-			sch.clear();
-			std::cout << "scheduler's exit"<< std::endl;
-		});
-	});
+          sch.after(4s) >> []{
+                    std::cout << "called after 4 second"<< std::endl;
+          } >> ([&sch]{
+               sch.clear();
+               std::cout << "scheduler's exit"<< std::endl;
+          });
+     });
 
 }
 
