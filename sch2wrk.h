@@ -21,6 +21,9 @@ public:
           sch.immediate() >> std::move(msg);
      }
      virtual void run() noexcept     {}
+     virtual void clear() noexcept {
+	    sch.removeAll();
+	}
      virtual void flush() noexcept {
           sch.sync();
      }
