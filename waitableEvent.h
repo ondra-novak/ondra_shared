@@ -20,27 +20,27 @@ namespace ondra_shared {
  */
 class WaitableEvent {
 public:
-	WaitableEvent(bool signaled = false):c(signaled?0:1) {}
+     WaitableEvent(bool signaled = false):c(signaled?0:1) {}
 
-	void signal() {
-		c.dec();
-	}
+     void signal() {
+          c.dec();
+     }
 
-	void reset() {
-		c.setCounter(1);
-	}
+     void reset() {
+          c.setCounter(1);
+     }
 
-	void operator()() const {
-		c.dec();
-	}
+     void operator()() const {
+          c.dec();
+     }
 
-	bool wait(unsigned int timeout_ms) {return c.wait(timeout_ms);}
-	void wait() {c.wait();}
-	template<typename TimePoint> bool wait_until(const TimePoint &tp) {return c.wait_until(tp);}
-	template<typename Duration> bool wait_for(const Duration &dur) {return c.wait_for(dur);}
+     bool wait(unsigned int timeout_ms) {return c.wait(timeout_ms);}
+     void wait() {c.wait();}
+     template<typename TimePoint> bool wait_until(const TimePoint &tp) {return c.wait_until(tp);}
+     template<typename Duration> bool wait_for(const Duration &dur) {return c.wait_for(dur);}
 
 protected:
-	mutable MTCounter c;
+     mutable MTCounter c;
 };
 
 

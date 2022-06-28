@@ -58,12 +58,20 @@ public:
     Callback(std::nullptr_t) {}
     ///Object is not copieable
     Callback(const Callback &other) = delete;
+    ///Delete this type of constructor - it is needed to use std::move()
+    Callback(Callback &other) = delete;
+    ///Delete this type of constructor
+    Callback(const Callback &&other) = delete;
     ///You can move object
     Callback(Callback &&other);
     ///You can assign by move
     Callback &operator=(Callback &&other);
     ///You can't assign by copy
     Callback &operator=(const Callback &other) = delete;
+    ///You can't assign by copy
+    Callback &operator=(const Callback &&other) = delete;
+    ///You can't assign by copy
+    Callback &operator=(Callback &other) = delete;
     ///Construct with a function
     template<typename Fn> Callback(Fn &&fn);
     ///Construct with pointer to an object and pointer to a member function

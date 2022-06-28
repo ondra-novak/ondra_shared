@@ -8,20 +8,20 @@ namespace ondra_shared {
 
 struct IniItem {
 
-	enum Type {
-		comment,
-		directive,
-		data
-	};
+     enum Type {
+          comment,
+          directive,
+          data
+     };
 
-	Type type;
-	StrViewA section;
-	StrViewA key;
-	StrViewA value;
+     Type type;
+     StrViewA section;
+     StrViewA key;
+     StrViewA value;
 
-	IniItem(Type t, const StrViewA &a):type(t),value(a) {}
-	IniItem(Type t, const StrViewA &a, const StrViewA &b):type(t),key(a),value(b) {}
-	IniItem(Type t, const StrViewA &a, const StrViewA &b, const StrViewA &c):type(t),section(a),key(b),value(c) {}
+     IniItem(Type t, const StrViewA &a):type(t),value(a) {}
+     IniItem(Type t, const StrViewA &a, const StrViewA &b):type(t),key(a),value(b) {}
+     IniItem(Type t, const StrViewA &a, const StrViewA &b, const StrViewA &c):type(t),section(a),key(b),value(c) {}
 
 
 };
@@ -94,191 +94,191 @@ struct IniItem {
  */
 template<typename Output>
 class IniParser {
-	enum State {
-		beginLine,comment,section,key,value,valueEscaped,
-		valueEscapedNl,waitForEoln,directiveKeyword,directiveData
-	};
+     enum State {
+          beginLine,comment,section,key,value,valueEscaped,
+          valueEscapedNl,waitForEoln,directiveKeyword,directiveData
+     };
 
 
 public:
 
 
-	IniParser(Output &&out)
-		:buffer(1,0)
-		,sectionSize(1)
-		,keySize(0)
-		,valueSize(0)
-		,escapeChar('\\')
-		,fn(std::forward<Output>(out))
-		,curState(beginLine) {}
+     IniParser(Output &&out)
+          :buffer(1,0)
+          ,sectionSize(1)
+          ,keySize(0)
+          ,valueSize(0)
+          ,escapeChar('\\')
+          ,fn(std::forward<Output>(out))
+          ,curState(beginLine) {}
 
 
-	void operator()(int c) {
+     void operator()(int c) {
 
-		switch (curState) {
-		case beginLine: readBeginLine(c);break;
-		case comment: readComment(c);break;
-		case section: readSection(c);break;
-		case key: readKey(c);break;
-		case value: readValue(c);break;
-		case valueEscaped: readValueEscaped(c);break;
-		case valueEscapedNl: readValueEscapedNl(c);break;
-		case waitForEoln: waitTillEoln(c);break;
-		case directiveKeyword: readDirectiveKeyword(c);break;
-		case directiveData: readDirectiveData(c);break;
-		}
+          switch (curState) {
+          case beginLine: readBeginLine(c);break;
+          case comment: readComment(c);break;
+          case section: readSection(c);break;
+          case key: readKey(c);break;
+          case value: readValue(c);break;
+          case valueEscaped: readValueEscaped(c);break;
+          case valueEscapedNl: readValueEscapedNl(c);break;
+          case waitForEoln: waitTillEoln(c);break;
+          case directiveKeyword: readDirectiveKeyword(c);break;
+          case directiveData: readDirectiveData(c);break;
+          }
 
-	}
+     }
 
 
 protected:
-	std::vector<char> buffer;
-	std::size_t sectionSize;
-	std::size_t keySize;
-	std::size_t valueSize;
-	char escapeChar;
+     std::vector<char> buffer;
+     std::size_t sectionSize;
+     std::size_t keySize;
+     std::size_t valueSize;
+     char escapeChar;
 
-	Output fn;
+     Output fn;
 
-	State curState;
-	State afterEscapeState;
+     State curState;
+     State afterEscapeState;
 
-	static bool isnl(int c) {
-		return c == '\n' || c == '\r';
-	}
-
-
-	void readBeginLine(int c) {
-		if (isspace(c)) return;
+     static bool isnl(int c) {
+          return c == '\n' || c == '\r';
+     }
 
 
+     void readBeginLine(int c) {
+          if (isspace(c)) return;
 
-		switch (c) {
-		case '#':  curState = comment;
-				   buffer.resize(sectionSize);
-				   break;
-		case '[': curState = section;
-				  buffer.clear();
-				  break;
-		case '@': curState = directiveKeyword;
-					buffer.resize(sectionSize);
-					break;
-		default: curState = key;
-				buffer.resize(sectionSize);
-				readKey(c);
-					break;
-		}
-	}
 
-	void readComment(int c) {
-		if (isnl(c)) {
-			curState = beginLine;
-			fn(IniItem(IniItem::comment, StrViewA(buffer.data()+sectionSize, buffer.size()-sectionSize)));
-		} else {
-			buffer.push_back((char)c);
-		}
-	}
 
-	void readSection(int c) {
+          switch (c) {
+          case '#':  curState = comment;
+                       buffer.resize(sectionSize);
+                       break;
+          case '[': curState = section;
+                      buffer.clear();
+                      break;
+          case '@': curState = directiveKeyword;
+                         buffer.resize(sectionSize);
+                         break;
+          default: curState = key;
+                    buffer.resize(sectionSize);
+                    readKey(c);
+                         break;
+          }
+     }
 
-		if (c ==']') {
-			buffer.push_back(0);
-			sectionSize = buffer.size();
-			curState = waitForEoln;
-		} else {
-			buffer.push_back((char)c);
-		}
-	}
+     void readComment(int c) {
+          if (isnl(c)) {
+               curState = beginLine;
+               fn(IniItem(IniItem::comment, StrViewA(buffer.data()+sectionSize, buffer.size()-sectionSize)));
+          } else {
+               buffer.push_back((char)c);
+          }
+     }
 
-	void readKey(int c) {
-		if (c == '=') {
-			buffer.push_back(0);
-			keySize = buffer.size() - sectionSize;
-			curState = value;
-		} else if (isnl(c)) {
-			buffer.push_back(0);
-			keySize = buffer.size() - sectionSize;
-			readValue(c);
-		} else {
-			buffer.push_back((char)c);
-		}
-	}
+     void readSection(int c) {
 
-	void readValue(int c) {
-		readValueGen(c, value, IniItem::data);
-	}
-	void readValueGen(int c, State escState, IniItem::Type dataType) {
-		if (isnl(c)) {
-			buffer.push_back(0);
-			valueSize = buffer.size() - (keySize+sectionSize);
-			StrViewA sectionName(buffer.data(), sectionSize-1);
-			StrViewA keyName(buffer.data()+sectionSize, keySize-1);
-			StrViewA valueName(buffer.data()+sectionSize+keySize, valueSize-1);
-			sectionName=sectionName.trim(isspace);
-			keyName=keyName.trim(isspace);
-			valueName=valueName.trim(isspace);
-			buffer[sectionName.data+sectionName.length - buffer.data()] = 0;
-			buffer[keyName.data+keyName.length - buffer.data()] = 0;
-			buffer[valueName.data+valueName.length - buffer.data()] = 0;
-			bool processed = false;
-			if (dataType == IniItem::directive) {
-				if (keyName == "\\") {
-					if (valueName.length == 1) {
-						escapeChar = valueName[0];
-						processed = true;
-					}
-				}
-			}
-			if (!processed) {
-				fn(IniItem(dataType,sectionName, keyName, valueName));
-			}
-			curState = beginLine;
-		} else if (c == escapeChar) {
-			afterEscapeState = escState;
-			curState = valueEscaped;
-		} else {
-			buffer.push_back((char)c);
-		}
-	}
+          if (c ==']') {
+               buffer.push_back(0);
+               sectionSize = buffer.size();
+               curState = waitForEoln;
+          } else {
+               buffer.push_back((char)c);
+          }
+     }
 
-	void readValueEscaped(int c) {
-		switch (c) {
-		case '\n':
-		case '\r': curState = valueEscapedNl; return;
-		case 'r': buffer.push_back('\r');break;
-		case 'n': buffer.push_back('\n');break;
-		default: buffer.push_back((char)c);break;
-		}
-		curState = afterEscapeState;
-	}
+     void readKey(int c) {
+          if (c == '=') {
+               buffer.push_back(0);
+               keySize = buffer.size() - sectionSize;
+               curState = value;
+          } else if (isnl(c)) {
+               buffer.push_back(0);
+               keySize = buffer.size() - sectionSize;
+               readValue(c);
+          } else {
+               buffer.push_back((char)c);
+          }
+     }
 
-	void readValueEscapedNl(int c) {
-		if (!isspace(c)) {
-			curState = afterEscapeState;
-			readValue(c);
-		}
-	}
+     void readValue(int c) {
+          readValueGen(c, value, IniItem::data);
+     }
+     void readValueGen(int c, State escState, IniItem::Type dataType) {
+          if (isnl(c)) {
+               buffer.push_back(0);
+               valueSize = buffer.size() - (keySize+sectionSize);
+               StrViewA sectionName(buffer.data(), sectionSize-1);
+               StrViewA keyName(buffer.data()+sectionSize, keySize-1);
+               StrViewA valueName(buffer.data()+sectionSize+keySize, valueSize-1);
+               sectionName=sectionName.trim(isspace);
+               keyName=keyName.trim(isspace);
+               valueName=valueName.trim(isspace);
+               buffer[sectionName.data+sectionName.length - buffer.data()] = 0;
+               buffer[keyName.data+keyName.length - buffer.data()] = 0;
+               buffer[valueName.data+valueName.length - buffer.data()] = 0;
+               bool processed = false;
+               if (dataType == IniItem::directive) {
+                    if (keyName == "\\") {
+                         if (valueName.length == 1) {
+                              escapeChar = valueName[0];
+                              processed = true;
+                         }
+                    }
+               }
+               if (!processed) {
+                    fn(IniItem(dataType,sectionName, keyName, valueName));
+               }
+               curState = beginLine;
+          } else if (c == escapeChar) {
+               afterEscapeState = escState;
+               curState = valueEscaped;
+          } else {
+               buffer.push_back((char)c);
+          }
+     }
 
-	void waitTillEoln(int c) {
-		if (isnl(c)) {
-			curState = beginLine;
-		}
-	}
+     void readValueEscaped(int c) {
+          switch (c) {
+          case '\n':
+          case '\r': curState = valueEscapedNl; return;
+          case 'r': buffer.push_back('\r');break;
+          case 'n': buffer.push_back('\n');break;
+          default: buffer.push_back((char)c);break;
+          }
+          curState = afterEscapeState;
+     }
 
-	void readDirectiveKeyword(int c) {
-		if (isspace(c)) {
-			buffer.push_back(0);
-			keySize = buffer.size() - sectionSize;
-			curState = directiveData;
-			if (isnl(c)) readDirectiveData(c);
-		} else {
-			buffer.push_back((char)c);
-		}
-	}
+     void readValueEscapedNl(int c) {
+          if (!isspace(c)) {
+               curState = afterEscapeState;
+               readValue(c);
+          }
+     }
 
-	void readDirectiveData(int c) {
-		readValueGen(c, directiveData, IniItem::directive);
-	}
+     void waitTillEoln(int c) {
+          if (isnl(c)) {
+               curState = beginLine;
+          }
+     }
+
+     void readDirectiveKeyword(int c) {
+          if (isspace(c)) {
+               buffer.push_back(0);
+               keySize = buffer.size() - sectionSize;
+               curState = directiveData;
+               if (isnl(c)) readDirectiveData(c);
+          } else {
+               buffer.push_back((char)c);
+          }
+     }
+
+     void readDirectiveData(int c) {
+          readValueGen(c, directiveData, IniItem::directive);
+     }
 
 };
 

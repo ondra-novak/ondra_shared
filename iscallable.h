@@ -4,8 +4,8 @@
 namespace ondra_shared {
 
 namespace _details {
-	template<typename T> struct IsVoid {typedef std::false_type Value;};
-	template<> struct IsVoid<void> {typedef std::true_type Value;};
+     template<typename T> struct IsVoid {typedef std::false_type Value;};
+     template<> struct IsVoid<void> {typedef std::true_type Value;};
 }
 
 
@@ -35,18 +35,18 @@ template<typename Ret, typename... Args, typename Q>
 class IsCallable<Ret(Args...),Q> {
 public:
 
-	class NotDefinedType {};
+     class NotDefinedType {};
 
-	template<typename Z>
-	static auto trycall(Z &&, Args&&... args) -> decltype(std::declval<Z>()(args...));
-	static NotDefinedType trycall(...);
+     template<typename Z>
+     static auto trycall(Z &&, Args&&... args) -> decltype(std::declval<Z>()(args...));
+     static NotDefinedType trycall(...);
 
-	static std::true_type checkRes(Ret);
-	static std::false_type checkRes(...);
+     static std::true_type checkRes(Ret);
+     static std::false_type checkRes(...);
 
-	typedef decltype(checkRes(trycall(std::declval<Q>(),std::declval<Args>()...))) Value;
+     typedef decltype(checkRes(trycall(std::declval<Q>(),std::declval<Args>()...))) Value;
 
-	static const bool value = Value::value;
+     static const bool value = Value::value;
 
 };
 
@@ -56,20 +56,20 @@ template< typename... Args, typename Q>
 class IsCallable<void(Args...),Q> {
 public:
 
-	class NotDefinedType {};
+     class NotDefinedType {};
 
-	template<typename Z>
-	static auto trycall(Z &&, Args&&... args) -> decltype(std::declval<Z>()(args...));
-	static NotDefinedType trycall(...);
+     template<typename Z>
+     static auto trycall(Z &&, Args&&... args) -> decltype(std::declval<Z>()(args...));
+     static NotDefinedType trycall(...);
 
-	static std::true_type checkRes(std::false_type);
-	static std::false_type checkRes(std::true_type);
+     static std::true_type checkRes(std::false_type);
+     static std::false_type checkRes(std::true_type);
 
-	typedef decltype(trycall(std::declval<Q>(),std::declval<Args>()...)) CallRes;
+     typedef decltype(trycall(std::declval<Q>(),std::declval<Args>()...)) CallRes;
 
-	typedef typename std::is_same<std::false_type, typename std::is_same<CallRes,NotDefinedType>::type >::type Value;
+     typedef typename std::is_same<std::false_type, typename std::is_same<CallRes,NotDefinedType>::type >::type Value;
 
-	static const bool value = Value::value;
+     static const bool value = Value::value;
 };
 
 

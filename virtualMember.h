@@ -28,31 +28,31 @@ namespace ondra_shared {
 template<typename Master, typename OffsetType = unsigned char>
 class VirtualMember {
 public:
-	VirtualMember(const Master *master):offset(calculateOffset(this,master)) {}
-	VirtualMember(const VirtualMember &) = delete;
-	void operator=(const VirtualMember &) = delete;
+     VirtualMember(const Master *master):offset(calculateOffset(this,master)) {}
+     VirtualMember(const VirtualMember &) = delete;
+     void operator=(const VirtualMember &) = delete;
 
 
 
 private:
-	OffsetType offset;
+     OffsetType offset;
 
-	static const std::uintptr_t maxOffset = (1<<(sizeof(offset)*8))-1;
+     static const std::uintptr_t maxOffset = (1<<(sizeof(offset)*8))-1;
 
 
-	static OffsetType calculateOffset(const VirtualMember *p, const Master *q) {
-		std::uintptr_t ofs = reinterpret_cast<const char *>(p) - reinterpret_cast<const char *>(q);
-		if (ofs>maxOffset) throw std::runtime_error("VirtualMember out of range");
-		return (OffsetType)ofs;
-	}
+     static OffsetType calculateOffset(const VirtualMember *p, const Master *q) {
+          std::uintptr_t ofs = reinterpret_cast<const char *>(p) - reinterpret_cast<const char *>(q);
+          if (ofs>maxOffset) throw std::runtime_error("VirtualMember out of range");
+          return (OffsetType)ofs;
+     }
 protected:
 
-	const Master *getMaster() const {
-		return reinterpret_cast<const Master *>(reinterpret_cast<const char *>(this)-offset);
-	}
-	 Master *getMaster() {
-		return reinterpret_cast<Master *>(reinterpret_cast<char *>(this)-offset);
-	}
+     const Master *getMaster() const {
+          return reinterpret_cast<const Master *>(reinterpret_cast<const char *>(this)-offset);
+     }
+      Master *getMaster() {
+          return reinterpret_cast<Master *>(reinterpret_cast<char *>(this)-offset);
+     }
 
 };
 

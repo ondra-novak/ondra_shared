@@ -18,75 +18,75 @@ namespace ondra_shared {
 class Semaphore{
 public:
 
-	Semaphore(unsigned int count):counter(count) {}
+     Semaphore(unsigned int count):counter(count) {}
 
-	void wait() {
-		std::unique_lock<std::mutex> _(mtx);
-		waiter.wait(_,[=]{return counter > 0;});
-		--counter;
-	}
+     void wait() {
+          std::unique_lock<std::mutex> _(mtx);
+          waiter.wait(_,[=]{return counter > 0;});
+          --counter;
+     }
 
-	template<typename TimePoint>
-	bool wait_until(const TimePoint &tp) {
-		std::unique_lock<std::mutex> _(mtx);
-		if (counter == 0) {
-			if (!waiter.wait_until(_,tp, [=]{return counter > 0;})) {
-				return false;
-			}
-		}
-		--counter;
-		return true;
-	}
+     template<typename TimePoint>
+     bool wait_until(const TimePoint &tp) {
+          std::unique_lock<std::mutex> _(mtx);
+          if (counter == 0) {
+               if (!waiter.wait_until(_,tp, [=]{return counter > 0;})) {
+                    return false;
+               }
+          }
+          --counter;
+          return true;
+     }
 
-	template<typename Duration>
-	bool wait_for(const Duration &dur) {
-		std::unique_lock<std::mutex> _(mtx);
-		if (counter == 0) {
-			if (!waiter.wait_for(_,dur, [=]{return counter > 0;})) {
-				return false;
-			}
-		}
-		--counter;
-		return true;
-	}
+     template<typename Duration>
+     bool wait_for(const Duration &dur) {
+          std::unique_lock<std::mutex> _(mtx);
+          if (counter == 0) {
+               if (!waiter.wait_for(_,dur, [=]{return counter > 0;})) {
+                    return false;
+               }
+          }
+          --counter;
+          return true;
+     }
 
-	Semaphore &operator++() {
-		std::unique_lock<std::mutex> _(mtx);
-		if (counter == 0) {
-			waiter.notify_one();
-		}
-		++counter;
-		return *this;
-	}
+     Semaphore &operator++() {
+          std::unique_lock<std::mutex> _(mtx);
+          if (counter == 0) {
+               waiter.notify_one();
+          }
+          ++counter;
+          return *this;
+     }
 
-	Semaphore &operator--() {
-		wait();
-		return *this;
-	}
+     Semaphore &operator--() {
+          wait();
+          return *this;
+     }
 
-	void lock() {
-		operator--();
-	}
+     void lock() {
+          operator--();
+     }
 
-	void unlock() {
-		operator++();
-	}
+     void unlock() {
+          operator++();
+     }
 
-	bool try_lock() {
-		std::unique_lock<std::mutex> _(mtx);
-		if (counter == 0) return false;
-		--counter;
-		return true;
-	}
+     bool try_lock() {
+          std::unique_lock<std::mutex> _(mtx);
+          if (counter == 0) return false;
+          --counter;
+          return true;
+     }
 
-	void signal() {
-		operator++();
-	}
+     void signal() {
+          operator++();
+     }
 
 protected:
-	std::mutex mtx;
-	std::condition_variable waiter;
-	unsigned int counter ;
+     std::mutex mtx;
+     std::condition_variable waiter;
+     unsigned int counter ;
 
 };
 

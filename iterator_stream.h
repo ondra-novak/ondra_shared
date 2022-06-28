@@ -14,26 +14,26 @@ namespace ondra_shared {
 template<typename Iter1, typename Iter2>
 class IteratorStream {
 public:
-	template<typename T1, typename T2>
-	IteratorStream(T2 &&cur, T1 &&end):cur(std::forward<T1>(cur)),end(std::forward<T2>(end)) {}
+     template<typename T1, typename T2>
+     IteratorStream(T2 &&cur, T1 &&end):cur(std::forward<T1>(cur)),end(std::forward<T2>(end)) {}
 
-	bool operator!() const {
-		return cur == end;
-	}
+     bool operator!() const {
+          return cur == end;
+     }
 
-	auto operator()() {
-		auto ret = *cur;
-		++cur;
-		return ret;
-	}
+     auto operator()() {
+          auto ret = *cur;
+          ++cur;
+          return ret;
+     }
 
-	auto operator *() const {
-		return *cur;
-	}
+     auto operator *() const {
+          return *cur;
+     }
 
 protected:
-	Iter1 cur;
-	Iter2 end;
+     Iter1 cur;
+     Iter2 end;
 
 };
 
@@ -49,13 +49,13 @@ protected:
  */
 template<typename T1, typename T2>
 auto iterator_stream(T1 &&begin, T2 &&end) {
-	return IteratorStream<std::remove_reference_t<T1>, std::remove_reference_t<T2> >(std::forward<T1>(begin),std::forward<T1>(end));
+     return IteratorStream<std::remove_reference_t<T1>, std::remove_reference_t<T2> >(std::forward<T1>(begin),std::forward<T1>(end));
 }
 
 template<typename T>
 auto iterator_stream(T &&container) {
-	return IteratorStream<std::remove_reference_t<decltype(container.begin())>,
-						  std::remove_reference_t<decltype(container.end())> >(container.begin(),container.end());
+     return IteratorStream<std::remove_reference_t<decltype(container.begin())>,
+                                std::remove_reference_t<decltype(container.end())> >(container.begin(),container.end());
 }
 
 

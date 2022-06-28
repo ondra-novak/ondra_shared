@@ -12,8 +12,8 @@ template<typename Res, typename FnType, FnType fn>
 class SharedRAIIImpl: public RAII<Res, FnType, fn>,  public RefCntObj {
 public:
 
-	using RAII<Res,FnType, fn>::RAII;
-	SharedRAIIImpl() {}
+     using RAII<Res,FnType, fn>::RAII;
+     SharedRAIIImpl() {}
 
 
 };

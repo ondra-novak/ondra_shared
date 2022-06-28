@@ -16,195 +16,195 @@ namespace ondra_shared {
 class DefaultApp {
 public:
 
-	bool debug = false;
-	bool verbose = false;
-	IniConfig config;
-	PStdLogProviderFactory logProvider;
-	std::optional<CmdArgIter> args;
-	std::filesystem::path appPath;
-	std::filesystem::path configPath;
-	const char *config_default_name = nullptr;
-	const char *help_banner = nullptr;
-	const char *log_section = "log";
-	std::ostream &output;
+     bool debug = false;
+     bool verbose = false;
+     IniConfig config;
+     PStdLogProviderFactory logProvider;
+     std::optional<CmdArgIter> args;
+     std::filesystem::path appPath;
+     std::filesystem::path configPath;
+     const char *config_default_name = nullptr;
+     const char *help_banner = nullptr;
+     const char *log_section = "log";
+     std::ostream &output;
 
-	struct Switch {
-		const char short_sw;
-		const char *long_sw;
-		std::function<void(CmdArgIter &)> handler;
-		const char *help;
-		const char *args = nullptr;
-	};
+     struct Switch {
+          const char short_sw;
+          const char *long_sw;
+          std::function<void(CmdArgIter &)> handler;
+          const char *help;
+          const char *args = nullptr;
+     };
 
-	DefaultApp(const std::initializer_list<Switch> &switches,
-				std::ostream &output,
-				const char *help_banner = nullptr)
-	:help_banner(help_banner)
-	,output(output)
-	,switches(switches)
-	 {}
-
-
-	bool init(int argc, char **argv) {
-		return init(CmdArgIter(argv[0],argc-1,argv+1));
-	}
-
-	bool init(CmdArgIter &&cmdIter) {
-
-		try {
-			const std::initializer_list<Switch> *ptr_default_switches;
-			const std::initializer_list<Switch> & default_switches = {
-					Switch{'h',"help",[&](CmdArgIter&){this->showHelp(*ptr_default_switches);exit(0);},"show this help"},
-					Switch{'d',"debug",[&](CmdArgIter&){debug=true;},"enable debug"},
-					Switch{'v',"verbose",[&](CmdArgIter&){verbose=true;},"verbose mode"},
-					Switch{'f',"config",[&](CmdArgIter&args){
-						configPath=args.getNext();
-						if (configPath.is_relative())
-							configPath = std::filesystem::current_path() / configPath;
-					},"<config_file> specify path to configuration file"}
-			};
-			ptr_default_switches = &default_switches;
-
-			bool res = process_switches(cmdIter, default_switches);
-
-			this->args = std::move(cmdIter);
-
-			if (!res) return false;
-
-			config.load(configPath.string());
-			auto logcfg = config[log_section];
-			logProvider = StdLogFileRotating::create(
-							verbose?std::string(""):logcfg["file"].getPath(""),
-							debug?StrViewA(""):logcfg["level"].getString(""),
-							LogLevel::debug,
-							logcfg["rotation"].getUInt(7),
-							logcfg["interval"].getUInt(86400));
-			logProvider->setDefault();
-			return true;
-
-		} catch (std::exception &e) {
-			output << e.what() << std::endl;
-			return false;
-		}
-
-	}
-
-	bool process_switches(CmdArgIter &cmdIter, const std::initializer_list<Switch> &default_switches) {
-
-		appPath = cmdIter.getProgramFullPath();
-		configPath = appPath;
-		configPath.remove_filename();
-		configPath /= "..";
-		configPath /= "conf";
-		configPath /= (config_default_name?config_default_name:appPath.stem().string().append(".conf").c_str());
+     DefaultApp(const std::initializer_list<Switch> &switches,
+                    std::ostream &output,
+                    const char *help_banner = nullptr)
+     :help_banner(help_banner)
+     ,output(output)
+     ,switches(switches)
+      {}
 
 
+     bool init(int argc, char **argv) {
+          return init(CmdArgIter(argv[0],argc-1,argv+1));
+     }
 
-		while (!!cmdIter) {
+     bool init(CmdArgIter &&cmdIter) {
 
-			char short_sw = 0;
-			const char *long_sw = nullptr;
-			if (cmdIter.isOpt()) short_sw = cmdIter.getOpt();
-			else if (cmdIter.isLongOpt()) long_sw = cmdIter.getLongOpt();
-			else break;
+          try {
+               const std::initializer_list<Switch> *ptr_default_switches;
+               const std::initializer_list<Switch> & default_switches = {
+                         Switch{'h',"help",[&](CmdArgIter&){this->showHelp(*ptr_default_switches);exit(0);},"show this help"},
+                         Switch{'d',"debug",[&](CmdArgIter&){debug=true;},"enable debug"},
+                         Switch{'v',"verbose",[&](CmdArgIter&){verbose=true;},"verbose mode"},
+                         Switch{'f',"config",[&](CmdArgIter&args){
+                              configPath=args.getNext();
+                              if (configPath.is_relative())
+                                   configPath = std::filesystem::current_path() / configPath;
+                         },"<config_file> specify path to configuration file"}
+               };
+               ptr_default_switches = &default_switches;
 
-			auto pred = [&](const Switch &s) {
-				if (long_sw) return std::strcmp(s.long_sw , long_sw) == 0;
-				else return  s.short_sw == short_sw;
-			};
+               bool res = process_switches(cmdIter, default_switches);
 
-			auto iter = std::find_if(switches.begin(), switches.end(), pred);
-			if (iter == switches.end()) {
-				auto iter2 = std::find_if(default_switches.begin(), default_switches.end(), pred);
-				if (iter2 == default_switches.end()) {
-					return false;
-				}else {
-					iter2->handler(cmdIter);
-				}
-			} else {
-				iter->handler(cmdIter);
-			}
+               this->args = std::move(cmdIter);
 
-		}
+               if (!res) return false;
+
+               config.load(configPath.string());
+               auto logcfg = config[log_section];
+               logProvider = StdLogFileRotating::create(
+                                   verbose?std::string(""):logcfg["file"].getPath(""),
+                                   debug?StrViewA(""):logcfg["level"].getString(""),
+                                   LogLevel::debug,
+                                   logcfg["rotation"].getUInt(7),
+                                   logcfg["interval"].getUInt(86400));
+               logProvider->setDefault();
+               return true;
+
+          } catch (std::exception &e) {
+               output << e.what() << std::endl;
+               return false;
+          }
+
+     }
+
+     bool process_switches(CmdArgIter &cmdIter, const std::initializer_list<Switch> &default_switches) {
+
+          appPath = cmdIter.getProgramFullPath();
+          configPath = appPath;
+          configPath.remove_filename();
+          configPath /= "..";
+          configPath /= "conf";
+          configPath /= (config_default_name?config_default_name:appPath.stem().string().append(".conf").c_str());
 
 
-		return true;
 
-	}
+          while (!!cmdIter) {
+
+               char short_sw = 0;
+               const char *long_sw = nullptr;
+               if (cmdIter.isOpt()) short_sw = cmdIter.getOpt();
+               else if (cmdIter.isLongOpt()) long_sw = cmdIter.getLongOpt();
+               else break;
+
+               auto pred = [&](const Switch &s) {
+                    if (long_sw) return std::strcmp(s.long_sw , long_sw) == 0;
+                    else return  s.short_sw == short_sw;
+               };
+
+               auto iter = std::find_if(switches.begin(), switches.end(), pred);
+               if (iter == switches.end()) {
+                    auto iter2 = std::find_if(default_switches.begin(), default_switches.end(), pred);
+                    if (iter2 == default_switches.end()) {
+                         return false;
+                    }else {
+                         iter2->handler(cmdIter);
+                    }
+               } else {
+                    iter->handler(cmdIter);
+               }
+
+          }
 
 
-	virtual void showHelp(const std::initializer_list<Switch> &defsw) {
-		if (help_banner) output << help_banner << std::endl << std::endl;
+          return true;
 
-		int spaceReq = 8;
-		for (auto &&sw:switches) {
-			std::size_t len = std::strlen(sw.long_sw);
-			std::size_t args = sw.args?std::strlen(sw.args)+1:0;
-			len+=args;
-			spaceReq = std::max<int>(len, spaceReq);
-		}
+     }
 
-		int spacePrefix = spaceReq + 9;
 
-		auto print = [&](const Switch &sw) {
-			if (sw.short_sw) output << "-" << sw.short_sw << " ";
-			else output << "   ";
+     virtual void showHelp(const std::initializer_list<Switch> &defsw) {
+          if (help_banner) output << help_banner << std::endl << std::endl;
 
-			if (sw.long_sw) output << "--" << sw.long_sw << " ";
-			else output << "   ";
+          int spaceReq = 8;
+          for (auto &&sw:switches) {
+               std::size_t len = std::strlen(sw.long_sw);
+               std::size_t args = sw.args?std::strlen(sw.args)+1:0;
+               len+=args;
+               spaceReq = std::max<int>(len, spaceReq);
+          }
 
-			if (sw.args) output << sw.args << " ";
+          int spacePrefix = spaceReq + 9;
 
-			output << " ";
+          auto print = [&](const Switch &sw) {
+               if (sw.short_sw) output << "-" << sw.short_sw << " ";
+               else output << "   ";
 
-			for (int i = spaceReq-(sw.long_sw?std::strlen(sw.long_sw):0)-(sw.args?std::strlen(sw.args)+1:0); i > 0; --i) {
-				output.put(' ');
-			}
+               if (sw.long_sw) output << "--" << sw.long_sw << " ";
+               else output << "   ";
 
-			wordwrap(sw.help, spacePrefix);
-		};
+               if (sw.args) output << sw.args << " ";
 
-		for (auto &&sw:switches) {
-			print(sw);
-		}
-		for (auto &&sw: defsw) {
-			print(sw);
-		}
-	}
+               output << " ";
 
-	void wordwrap(const char *text, int swspace = 0) {
-		int linelen = 75-swspace;
-		if (linelen < 0) linelen = 0;
-		int l = linelen;
-		while (*text) {
-			if (*text == '\n' || (l <= 0 && std::isspace(*text))) {
-				output << std::endl;
-				for (int i = 0; i < swspace; i++) {
-					output.put(' ');
-				}
-				l = linelen;
-			} else {
-				output.put(*text);
-				l--;
-			}
-			text++;
-		}
-		output << std::endl;
-	}
+               for (int i = spaceReq-(sw.long_sw?std::strlen(sw.long_sw):0)-(sw.args?std::strlen(sw.args)+1:0); i > 0; --i) {
+                    output.put(' ');
+               }
 
-	virtual ~DefaultApp() {}
+               wordwrap(sw.help, spacePrefix);
+          };
 
-	std::vector<StrViewA> getArgs() {
-		std::vector<StrViewA> argList;
-		while (!!(*args)) argList.push_back(args->getNext());
-		return argList;
-	}
+          for (auto &&sw:switches) {
+               print(sw);
+          }
+          for (auto &&sw: defsw) {
+               print(sw);
+          }
+     }
+
+     void wordwrap(const char *text, int swspace = 0) {
+          int linelen = 75-swspace;
+          if (linelen < 0) linelen = 0;
+          int l = linelen;
+          while (*text) {
+               if (*text == '\n' || (l <= 0 && std::isspace(*text))) {
+                    output << std::endl;
+                    for (int i = 0; i < swspace; i++) {
+                         output.put(' ');
+                    }
+                    l = linelen;
+               } else {
+                    output.put(*text);
+                    l--;
+               }
+               text++;
+          }
+          output << std::endl;
+     }
+
+     virtual ~DefaultApp() {}
+
+     std::vector<StrViewA> getArgs() {
+          std::vector<StrViewA> argList;
+          while (!!(*args)) argList.push_back(args->getNext());
+          return argList;
+     }
 
 
 
 protected:
 
-	std::vector<Switch> switches;
+     std::vector<Switch> switches;
 
 };
 
