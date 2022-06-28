@@ -106,7 +106,7 @@ public:
 	}
 };
 
-
+[[deprecated (use shared_lockable_ptr)]]
 template<typename K, typename Traits = SharedObjectDefaultTraits<K> >
 class SharedObject {
 
