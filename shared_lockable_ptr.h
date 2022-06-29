@@ -173,12 +173,6 @@ namespace shared_lockable_ptr_details {
         T *get() const  {return *_ptr;}
         operator T *() const {return *_ptr;}
 
-        operator bool() const {return _ptr != nullptr;}
-        bool operator !() const {return _ptr == nullptr;}
-
-        bool operator!=(std::nullptr_t) const {return _ptr != nullptr;}
-        bool operator==(std::nullptr_t) const {return _ptr == nullptr;}
-
         template<typename L>
         bool operator==(const locked_pointer<T, L> &other) {return _ptr == other._ptr;}
         template<typename L>
