@@ -80,6 +80,11 @@ public:
     R operator()(FP<Args>... args) const noexcept(nx) {
         return _ptr->call(std::forward<FP<Args>>(args)...);
     }
+    ///Retrieves identification of this function - can be used to find function in map
+    const void *get_ident() const {
+        return _ptr.get();
+    }
+
 private:
     std::unique_ptr<AbstractFn> _ptr;
 };

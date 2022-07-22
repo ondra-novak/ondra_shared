@@ -43,7 +43,7 @@ void floatToString(Number value, Fn &&fn, int maxPrecisionDigits=8) {
                     1000000, //6
                     10000000, //7
                     100000000, //8
-                     1000000000 //9
+                    1000000000 //9
           };
      const char *inf = "∞";
 

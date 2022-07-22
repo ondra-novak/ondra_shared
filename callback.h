@@ -12,6 +12,7 @@
 #include <typeinfo>
 
 #include "fastsharedalloc.h"
+#include "fastparam.h"
 
 namespace ondra_shared {
 
@@ -36,15 +37,6 @@ namespace ondra_shared {
  * example when function is used as completion function
  */
 template<typename T> class Callback;
-
-
-///Converts Type to its const Type reference variant if it is possible.
-template<typename Type> struct FastParamT {using T = const Type &;};
-template<typename Type> struct FastParamT<Type &> {using T = Type &;};
-template<typename Type> struct FastParamT<Type &&> {using T = Type &&;};
-template<typename Type> struct FastParamT<Type *> {using T = Type *;};
-template<typename Type> struct FastParamT<const Type *> {using T = const Type *;};
-template<typename T> using FastParam = typename FastParamT<T>::T;
 
 
 
