@@ -115,6 +115,9 @@ protected:
         }
     };
 
+    template<typename Fn>
+    friend auto trailer(Fn &&fn);
+
 };
 
 

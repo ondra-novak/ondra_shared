@@ -46,7 +46,8 @@ template<typename T, typename Q>
 shared_lockable_ptr<T> static_pointer_cast(const shared_lockable_ptr<Q> &ptr);
 template<typename T, typename Q>
 shared_lockable_ptr<T> dynamic_pointer_cast(const shared_lockable_ptr<Q> &ptr);
-
+template<typename T>
+class enable_share_lockable_from_this;
 
 
 namespace shared_lockable_ptr_details {
@@ -236,7 +237,10 @@ namespace shared_lockable_ptr_details {
     template<typename T> class smart_ptr;
     template<typename T> class control_static_alloc;
 
-
+    template<typename T>
+    abstract_control_with_type<T> * set_enable_share_lockable_from_this(
+                                            abstract_control_with_type<T> *cntr,
+                                            enable_share_lockable_from_this<T> *obj);
 
     template<typename T>
     abstract_control_with_type<T> *set_enable_share_lockable_from_this(abstract_control_with_type<T> *cntr, ...) {
