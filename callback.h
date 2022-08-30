@@ -13,6 +13,8 @@
 
 #include "fastsharedalloc.h"
 #include "fastparam.h"
+#include <c++/9/stdexcept>
+#include <string>
 
 namespace ondra_shared {
 

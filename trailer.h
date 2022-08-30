@@ -54,6 +54,10 @@ protected:
     };
 
 
+    template<typename Fn>
+    friend auto trailer(Fn &&fn);
+
+
     using Ptr = std::unique_ptr<AbstractCall>;
 
     template<typename Fn>
@@ -164,7 +168,7 @@ public:
 
  protected:
     Ptr ptr;
-    char buffer[buffsz];
+    char buffer[buffsz+sizeof(std::size_t)];
     std::size_t aptr = 0;
 
     void *alloc(std::size_t size) {
@@ -173,10 +177,15 @@ public:
         aptr+=size;
         return out;
     }
-
-
-
 };
+///Deferred trailer
+/** allocates space for the single type or function, but remains empty until it is later activated
+ */
+template<typename T>
+class DeferredTrailer: public Trailer<sizeof(Trailer_Defs::SingleCallNoAlloc<T>)> {
+
+};;
+
 template<std::size_t buffsz>
 template<typename Fn, typename >
 void Trailer<buffsz>::push(Fn &&fn) {
@@ -206,7 +215,9 @@ inline Trailer<buffsz>::~Trailer() {
 
 template<std::size_t buffsz>
 inline Trailer<buffsz>::Trailer(Trailer &&other) {
-    ptr = Ptr(other.ptr.release()->move(buffer, aptr, buffsz));
+    if (other.ptr != nullptr) {
+        ptr = Ptr(other.ptr.release()->move(buffer, aptr, buffsz));
+    }
 }
 
 template<std::size_t buffsz>
