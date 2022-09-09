@@ -74,8 +74,14 @@ public:
     move_only_function &operator=(move_only_function &other) = delete;
 
     operator bool() const {return _ptr != nullptr;}
+    bool operator!() const {return _ptr == nullptr;}
+
     bool operator==(std::nullptr_t) const {return _ptr == nullptr;}
     bool operator!=(std::nullptr_t) const {return _ptr != nullptr;}
+
+    bool operator==(const move_only_function &other) const {return _ptr == other._ptr;}
+    bool operator!=(const move_only_function &other) const {return _ptr != other._ptr;}
+
 
     R operator()(FP<Args>... args) const noexcept(nx) {
         return _ptr->call(std::forward<FP<Args>>(args)...);
