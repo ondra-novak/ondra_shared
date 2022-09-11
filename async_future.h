@@ -28,13 +28,13 @@ protected:
         AbstractCallback(AbstractCallback *next):next(next){};
         AbstractCallback(const AbstractCallback &other) = delete;
         AbstractCallback& operator=(const AbstractCallback &other) = delete;
-        virtual void run(const Me &) noexcept = 0;
+        virtual void run(const Me &, bool async) noexcept = 0;
         virtual ~AbstractCallback() {
             if (next) delete next;
         }
-        void flush_down(const Me &x) {
-            run(x);
-            if (next) next->flush_down(x);
+        void flush_down(const Me &x, bool async) {
+            run(x,async);
+            if (next) next->flush_down(x,async);
         }
     };
 
@@ -43,8 +43,19 @@ protected:
     public:
         Callback(Fn &&fn, AbstractCallback<Me> *next)
             :AbstractCallback<Me>(next), fn(std::forward<Fn>(fn)) {}
-        virtual void run(const Me &x) noexcept {
+        virtual void run(const Me &x, bool) noexcept {
             fn(x);
+        }
+    protected:
+        Fn fn;
+    };
+    template<typename Me, typename Fn>
+    class Callback2: public AbstractCallback<Me> {
+    public:
+        Callback2(Fn &&fn, AbstractCallback<Me> *next)
+            :AbstractCallback<Me>(next), fn(std::forward<Fn>(fn)) {}
+        virtual void run(const Me &x, bool b) noexcept {
+            fn(x,b);
         }
     protected:
         Fn fn;
@@ -188,9 +199,25 @@ public:
      */
     operator const T &() const;
 
+    /** @{ */
     ///Attach new callback
     /**
      * @param cb callback function, which accepts the const reference to the future object
+     *
+     * You can choose two prototypes
+     *
+     * @code
+     * void(const async_future &value);
+     * void(const async_future &value, bool async);
+     * @endcode
+     *
+     * The second variant contains bool async, which is set true if the callback
+     * is being called asynchronously and set to false when it is called synchronously.
+     * The synchronous call means in context of this function, which also means, that
+     * callback is called immediately after attach, because the future is already
+     * resolved, so it is called in the context of the current thread. This helps you to manage
+     * control flow. You probably don't need continue in cycle recursively if you know,
+     * that call is synchronous
      *
      * @note if the future is already resolved, the callback function is immediatelly called,
      * otherwise it is registered and can be called when the future is resolved.
@@ -200,8 +227,17 @@ public:
      * it is resolved, the callback function is called with the not ready yet future (meaning
      * that future will be never resolved)
      */
-    template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<const async_future<T> &>()))>
-    void operator>>(Fn &&cb);
+    template<typename Fn>
+    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>())) {
+    	addfn1(std::forward<Fn>(cb));
+    }
+
+    template<typename Fn>
+    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>(), std::declval<bool>())) {
+    	addfn2(std::forward<Fn>(cb));
+    }
+
+    /** }@ **/
 
     ///Determines whether future is ready
     /**
@@ -242,50 +278,14 @@ protected:
     };
 
     void mark_resolved();
-    void flush_cbs();
-    AbstractCallback *add_cb(AbstractCallback *itm);
+    void flush_cbs(bool async);
+    AbstractCallback *add_cb(AbstractCallback *itm, bool async);
 
-};
+    template<typename Fn>
+    void addfn1(Fn &&cb);
 
-template<>
-class async_future<void>: public async_future_common {
-public:
-
-
-    async_future();
-    async_future(async_future &&other);
-    async_future(const async_future &other);
-    async_future(bool ready);
-    async_future(std::exception_ptr eptr);
-    ~async_future();
-
-    async_future &operator=(async_future &&other);
-    async_future &operator=(const async_future &other);
-    async_future &operator=(bool ready);
-    async_future &operator=(std::exception_ptr eptr);
-
-    operator bool() const;
-
-    template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<const async_future<void> &>()))>
-    void operator>>(Fn &&cb);
-
-    bool is_ready() const;
-    bool operator !() const {return !is_ready();}
-
-
-
-protected:
-
-    using AbstractCallback = async_future_common::AbstractCallback<async_future<void> >;
-
-
-    std::atomic<bool> _resolved;
-    std::atomic<AbstractCallback *> _callbacks;
-    std::exception_ptr _eptr;
-
-    void mark_resolved();
-    void flush_cbs();
-    AbstractCallback *add_cb(AbstractCallback *itm);
+    template<typename Fn>
+    void addfn2(Fn &&cb);
 
 };
 
@@ -367,7 +367,7 @@ template<typename T>
 inline async_future<T>::~async_future() {
     AbstractCallback *z = _callbacks.exchange(nullptr, std::memory_order_relaxed);
     if (z) {
-        z->flush_down(*this);
+        z->flush_down(*this, true);
         delete z;
     }
 
@@ -452,14 +452,26 @@ inline async_future<T>::operator const T&() const {
 }
 
 template<typename T>
-template<typename Fn, typename>
-inline void async_future<T>::operator >>(Fn &&fn) {
+template<typename Fn>
+inline void async_future<T>::addfn1(Fn &&fn) {
     using Callback = async_future_common::Callback<async_future<T>, Fn >;
     if (is_ready()) {
         fn(*this);
     } else {
         auto lt = std::make_unique<Callback>(std::forward<Fn>(fn), nullptr);
-        add_cb(lt.release());
+        add_cb(lt.release(), false);
+    }
+}
+
+template<typename T>
+template<typename Fn>
+inline void async_future<T>::addfn2(Fn &&fn) {
+    using Callback2 = async_future_common::Callback2<async_future<T>, Fn >;
+    if (is_ready()) {
+        fn(*this,false);
+    } else {
+        auto lt = std::make_unique<Callback2>(std::forward<Fn>(fn), nullptr);
+        add_cb(lt.release(), false);
     }
 }
 
@@ -472,150 +484,30 @@ inline bool async_future<T>::is_ready() const {
 template<typename T>
 inline void async_future<T>::mark_resolved() {
     _resolved.store(true, std::memory_order_release);
-    flush_cbs();
+    flush_cbs(true);
 }
 template<typename T>
-inline void async_future<T>::flush_cbs() {
+inline void async_future<T>::flush_cbs(bool async) {
     AbstractCallback *l = _callbacks.exchange(nullptr);
     if (l) {
-        l->flush_down(*this);
+        l->flush_down(*this, async);
         delete l;
     }
 }
 
 template<typename T>
-inline typename async_future<T>::AbstractCallback* async_future<T>::add_cb(AbstractCallback *itm) {
+inline typename async_future<T>::AbstractCallback* async_future<T>::add_cb(AbstractCallback *itm, bool async) {
     AbstractCallback *nx = itm->next;
     itm->next = nullptr;
     while (!_callbacks.compare_exchange_weak(itm->next, itm)) ;
     if (is_ready()) {
-        flush_cbs();
+        flush_cbs(async);
     }
     return nx;
 
 }
 
 
-inline async_future<void>::async_future()
-:_resolved(false),_callbacks(nullptr), _eptr(nullptr) {}
-
-inline async_future<void>::async_future(async_future<void>&& other)
-:_resolved(other.is_ready()),_callbacks(other._callbacks.exchange(nullptr)),_eptr(std::move(other._eptr))
-{
-}
-
-inline async_future<void>::async_future(const async_future& other)
-:_resolved(other.is_ready()),_callbacks(nullptr),_eptr(other._eptr)
-{
-}
-
-inline async_future<void>::async_future(bool ready)
-:_resolved(ready),_callbacks(nullptr),_eptr(nullptr)
-{
-}
-
-inline async_future<void>::async_future(std::exception_ptr eptr)
-:_resolved(true),_callbacks(nullptr),_eptr(eptr)
-{
-}
-
-inline async_future<void>::~async_future()
-{
-    auto l = _callbacks.exchange(nullptr);
-    if (l != nullptr) {
-        l->flush_down(*this);
-        delete l;
-    }
-}
-
-inline async_future<void>& async_future<void>::operator =(async_future<void> && other)
-{
-    if (this != &other) {
-        if (is_ready()) throw async_future_already_resolved();
-        if (other.is_ready()) {
-            mark_resolved();
-        } else {
-            auto z = other._callbacks.exchange(nullptr);
-            while (z) z = add_cb(z);
-        }
-    }
-    return *this;
-}
-
-inline async_future<void>& async_future<void>::operator =(const async_future<void>& other)
-{
-    if (this != &other) {
-        if (is_ready()) throw async_future_already_resolved();
-        if (other.is_ready()) {
-            mark_resolved();
-        }
-    }
-    return *this;
-}
-
-inline async_future<void>& async_future<void>::operator =(bool ready) {
-    if (this->is_ready()) throw async_future_already_resolved();
-    if (ready) mark_resolved();
-    return *this;
-}
-
-
-inline async_future<void>& async_future<void>::operator =(std::exception_ptr eptr)
-{
-    if (is_ready()) throw async_future_already_resolved();
-    _eptr = eptr;
-    mark_resolved();
-    return *this;
-}
-
-inline async_future<void>::operator bool() const
-{
-    return is_ready();
-}
-
-template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<const async_future<void> &>()))>
-inline void async_future<void>::operator >>(Fn&& cb)
-{
-    using Callback = async_future_common::Callback<async_future<void>, Fn >;
-    if (is_ready()) {
-        cb(*this);
-    } else {
-        auto lt = std::make_unique<Callback>(std::forward<Fn>(cb), nullptr);
-        add_cb(lt.release());
-    }
-
-}
-
-inline bool async_future<void>::is_ready() const
-{
-    return _resolved.load(std::memory_order_acquire);
-}
-
-inline void async_future<void>::mark_resolved()
-{
-    _resolved.store(true, std::memory_order_release);
-    flush_cbs();
-}
-
-inline void async_future<void>::flush_cbs()
-{
-    auto z = _callbacks.exchange(nullptr);
-    if (z) {
-        z->flush_down(*this);
-        delete z;
-    }
-}
-
-inline async_future<void>::AbstractCallback* async_future<void>::add_cb(AbstractCallback* itm)
-{
-    AbstractCallback *nx = itm->next;
-    itm->next = nullptr;
-    while (!_callbacks.compare_exchange_weak(itm->next, itm)) ;
-    if (is_ready()) {
-        flush_cbs();
-    }
-    return nx;
-}
 
 }
 #endif /* ONDRA_SHARED_ASYNC_FUTURE_H_wdj239edj3u30 */
