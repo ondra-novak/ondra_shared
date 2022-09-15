@@ -228,13 +228,15 @@ public:
      * that future will be never resolved)
      */
     template<typename Fn>
-    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>())) {
+    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>()), std::declval<async_future &&>()) {
     	addfn1(std::forward<Fn>(cb));
+    	return std::move(*this);
     }
 
     template<typename Fn>
-    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>(), std::declval<bool>())) {
+    auto operator>>(Fn &&cb) -> decltype(std::declval<Fn>()(std::declval<const async_future<T> &>(), std::declval<bool>()), std::declval<async_future &&>()) {
     	addfn2(std::forward<Fn>(cb));
+    	return std::move(*this);
     }
 
     /** }@ **/
@@ -312,7 +314,7 @@ inline async_future<T>::async_future()
 template<typename T>
 inline async_future<T>::async_future(async_future &&other)
 :_resolved(other.is_ready())
-,_callbacks(other._callbacks)
+,_callbacks(other._callbacks.load())
 ,_is_exception(other._is_exception)
 {
     other._callbacks = nullptr;
