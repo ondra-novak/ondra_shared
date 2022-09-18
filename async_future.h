@@ -135,6 +135,11 @@ public:
      */
 
     async_future(std::exception_ptr eptr);
+    
+    template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<const async_future<T> &>()))>
+    async_future(Fn &&fn):async_future() {
+        this->operator>>(std::forward<Fn>(fn));
+    }
     ///Destruction
     /**
      * @note if the future being destroied is not ready yet, all callbacks
