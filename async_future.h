@@ -446,6 +446,7 @@ inline async_future<T>& async_future<T>::operator =(T &&value) {
 template<typename T>
 inline async_future<T>& async_future<T>::operator =(std::exception_ptr eptr) {
     if (is_ready()) throw async_future_already_resolved();
+    _is_exception = true;
     new(&_eptr) std::exception_ptr(eptr);
     mark_resolved();
     return *this;
