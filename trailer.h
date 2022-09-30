@@ -45,7 +45,7 @@ template<std::size_t buffsz=sizeof(void *)*16> class Trailer;
 
 
 class Trailer_Defs {
-protected:
+public:
     class AbstractCall {
     public:
         virtual ~AbstractCall() {}
