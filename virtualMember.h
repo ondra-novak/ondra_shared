@@ -20,7 +20,7 @@ namespace ondra_shared {
  * VirtualMember occupies one byte (can be overriden if needed). In this
  * byte there is stored offset from the member to the address of its owner
  *
- * You need to initialize the vierual member by a pointer to the owner
+ * You need to initialize the virtual member by a pointer to the owner
  *
  *  VirtualMembers cannot be copied or assigned
  */

@@ -14,10 +14,8 @@
 
 
 #include "ini_parser.h"
-
 #include "stringpool.h"
 #include "virtualMember.h"
-#include "trailer.h"
 
 namespace ondra_shared {
 
@@ -26,7 +24,7 @@ class IniConfig {
 public:
 
 
-     typedef StringPool<char> StrPool;
+     typedef StringPool<char, std::string_view> StrPool;
      typedef StrPool::String String;
 
      struct Value {
@@ -37,28 +35,28 @@ public:
           Value(String v,String p):v(v),p(p) {}
           std::string getPath() const;
           ///retrieves current path for this value
-          StrViewA getCurPath() const;
+          std::string_view getCurPath() const;
           std::size_t getUInt() const;
           std::intptr_t getInt() const;
           bool getBool() const;
           double getNumber() const;
-          StrViewA getString() const {return v.getView();}
-          const char *c_str() const {return v.getView().data;}
+          std::string_view getString() const {return v.getView();}
+          const char *c_str() const {return v.getView().data();}
 
           std::string getPath(std::string &&default_path) const;
-          StrViewA getCurPath(StrViewA defval) const;
+          std::string_view getCurPath(std::string_view defval) const;
           std::size_t getUInt(std::size_t default_value) const;
           bool getBool(bool default_value) const;
           std::intptr_t getInt(std::intptr_t default_value) const;
           double getNumber(double default_value) const;
-          StrViewA getString(const StrViewA &default_value) const;
+          std::string_view getString(const std::string_view &default_value) const;
           const char *c_str(const char *default_value) const;
 
           template<typename T>
           static void checkSuffix(char c, T &v);
 
           static const Value &undefined() {
-               static Value udef(String(StrViewA("undef",0)), String());
+               static Value udef(String(std::string_view("undef",0)), String());
                return udef;
           }
           bool defined() const {
@@ -96,7 +94,7 @@ public:
           class Mandatory:public VirtualMember<KeyValueMap> {
           public:
                using VirtualMember<KeyValueMap>::VirtualMember;
-               const Value &operator[](StrViewA name) const {
+               const Value &operator[](std::string_view name) const {
                     return getMaster()->getMandatory(name);
                }
           };
@@ -107,7 +105,7 @@ public:
           KeyValueMap(const KeyValueMap &other):std::map<String, Value>(other),mandatory(this),section(other.section) {}
           KeyValueMap(KeyValueMap &&other):std::map<String, Value>(std::move(other)),mandatory(this),section(other.section) {}
 
-          const Value &operator[](StrViewA name) const {
+          const Value &operator[](std::string_view name) const {
                auto iter = find(String(name));
                if (iter == end()) return Value::undefined();
                else return iter->second;
@@ -115,13 +113,13 @@ public:
           }
 
      private:
-          const Value &getMandatory(StrViewA name) const {
+          const Value &getMandatory(std::string_view name) const {
                auto iter = find(String(name));
-               if (iter == end()) throw NotFoundException(section.getView(), name);
+               if (iter == end()) throw NotFoundException(std::string(section.getView()), std::string(name));
                else return iter->second;
           }
 
-          void changeName(const StrViewA &name) const {section = name;}
+          void changeName(const std::string_view &name) const {section = name;}
 
 
 
@@ -136,42 +134,42 @@ public:
      typedef std::map<String, KeyValueMap> SectionMap;
 
 
-     const Section &operator[](const StrViewA &sectionName) const;
+     const Section &operator[](const std::string_view &sectionName) const;
      SectionMap::const_iterator begin() const;
      SectionMap::const_iterator end() const;
 
 
      template<typename Fn, typename D>
-     void load(const Fn &fn, const StrViewA &path, D &&directives, const StrViewA &curSection);
+     void load(const Fn &fn, const std::string_view &path, D &&directives, const std::string_view &curSection);
 
      template<typename D>
-     bool load(const std::string &pathname,  D &&directives, const StrViewA &curSection = StrViewA());
+     bool load(const std::string &pathname,  D &&directives, const std::string_view &curSection = std::string_view());
 
      ///Loads config but using reference path to interpret relative paths in the config
      template<typename D>
-     bool load_setpath(const std::string &pathname, const StrViewA &refpath,  D &&directives, const StrViewA &curSection = StrViewA());
+     bool load_setpath(const std::string &pathname, const std::string_view &refpath,  D &&directives, const std::string_view &curSection = std::string_view());
 
      void load(const std::string &pathname);
 
      ///Loads config but using reference path to interpret relative paths in the config
-     void load_setpath(const std::string &pathname, const StrViewA &refpath);
+     void load_setpath(const std::string &pathname, const std::string_view &refpath);
 
      Value createValue(const String &value);
 
      void load(const IniItem &item);
 
-     IniConfig():emptyMap(StrViewA()) {}
+     IniConfig():emptyMap(std::string_view()) {}
 
 
 #ifdef _WIN32
-     StrViewA pathSeparator="\\";
-     static inline bool isRooted(StrViewA path) {
+     std::string_view pathSeparator="\\";
+     static inline bool isRooted(std::string_view path) {
           return !path.empty() && (path[0] == '\\' ||
                     (path.length > 2 && isalpha(path[0]) && path[1] == ':' && path[2] == '\\'));
      }
 #else
-     static constexpr StrViewA pathSeparator="/";
-     static inline bool isRooted(StrViewA path) {
+     static constexpr std::string_view pathSeparator="/";
+     static inline bool isRooted(std::string_view path) {
           return !path.empty() && path[0] == '/';
      }
 #endif
@@ -184,7 +182,7 @@ protected:
      String curPath;
 
 
-     KeyValueMap &loadSection(StrViewA section);
+     KeyValueMap &loadSection(std::string_view section);
 };
 
 
@@ -202,10 +200,10 @@ inline std::string IniConfig::Value::getPath() const {
      return s;
 }
 
-inline StrViewA IniConfig::Value::getCurPath() const {
-     return StrViewA(p).substr(0,p.getLength()-1);
+inline std::string_view IniConfig::Value::getCurPath() const {
+     return std::string_view(p).substr(0,p.getLength()-1);
 }
-inline const IniConfig::KeyValueMap& IniConfig::operator [](const StrViewA& sectionName) const {
+inline const IniConfig::KeyValueMap& IniConfig::operator [](const std::string_view& sectionName) const {
      auto itr = smap.find(sectionName);
      if (itr == smap.end()) {
           emptyMap.changeName(sectionName);
@@ -224,57 +222,61 @@ inline IniConfig::SectionMap::const_iterator IniConfig::end() const {
 }
 
 template<typename Fn, typename D>
-inline void IniConfig::load(const Fn &fn, const StrViewA &path, D &&directives, const StrViewA &curSection) {
+inline void IniConfig::load(const Fn &fn, const std::string_view &path, D &&directives, const std::string_view &curSection) {
 
      String prevPath = curPath;
-     auto f1 = trailer([&]{curPath = prevPath;});
+     try {
 
-     auto sep = path.lastIndexOf(pathSeparator);
-     if (sep != path.npos) {
-          StrViewA newpath = StrViewA(path).substr(0,sep+1);
-          curPath = pool.add(newpath);
+         auto sep = path.rfind(pathSeparator);
+         if (sep != path.npos) {
+              std::string_view newpath = std::string_view(path).substr(0,sep+1);
+              curPath = pool.add(newpath);
+         }
+
+
+         class ProcessFn {
+         public:
+              IniConfig &owner;
+              D &&directives;
+              std::string_view curSection;
+
+              void operator()(const IniItem &item) const {
+                   if (item.section.empty() && !curSection.empty()) {
+                        IniItem newItem = item;
+                        newItem.section = curSection;
+                        operator()(newItem);
+                   } else {
+                        if (item.type == IniItem::data)     owner.load(item);
+                        else if (item.type == IniItem::directive) directives(item);
+                   }
+              }
+
+              ProcessFn(IniConfig &owner, D &&directives, const std::string_view &curSection)
+                   :owner(owner),directives(std::forward<D>(directives)),curSection(curSection) {}
+         };
+
+         ProcessFn processFn(*this,std::forward<D>(directives), curSection);
+         IniParser<ProcessFn &&> parse(std::move(processFn));
+
+         int i = fn();
+         while (i != -1) {
+              parse(i);
+              i = fn();
+         }
+         curPath = prevPath;
+     } catch (...) {
+         curPath = prevPath;
+         throw;
      }
-
-
-     class ProcessFn {
-     public:
-          IniConfig &owner;
-          D &&directives;
-          StrViewA curSection;
-
-          void operator()(const IniItem &item) const {
-               if (item.section.empty() && !curSection.empty()) {
-                    IniItem newItem = item;
-                    newItem.section = curSection;
-                    operator()(newItem);
-               } else {
-                    if (item.type == IniItem::data)     owner.load(item);
-                    else if (item.type == IniItem::directive) directives(item);
-               }
-          }
-
-          ProcessFn(IniConfig &owner, D &&directives, const StrViewA &curSection)
-               :owner(owner),directives(std::forward<D>(directives)),curSection(curSection) {}
-     };
-
-     ProcessFn processFn(*this,std::forward<D>(directives), curSection);
-     IniParser<ProcessFn &&> parse(std::move(processFn));
-
-     int i = fn();
-     while (i != -1) {
-          parse(i);
-          i = fn();
-     }
-
 }
 
 template<typename D>
-inline bool IniConfig::load(const std::string& pathname,D&& directives, const StrViewA &curSection) {
+inline bool IniConfig::load(const std::string& pathname,D&& directives, const std::string_view &curSection) {
      return load_setpath(pathname, pathname, std::forward<D>(directives), curSection);
 }
 
 template<typename D>
-inline bool IniConfig::load_setpath(const std::string& pathname, const StrViewA &path, D&& directives, const StrViewA &curSection) {
+inline bool IniConfig::load_setpath(const std::string& pathname, const std::string_view &path, D&& directives, const std::string_view &curSection) {
 
 
      std::ifstream input(pathname);
@@ -302,15 +304,15 @@ inline bool IniConfig::load_setpath(const std::string& pathname, const StrViewA 
      return true;
 }
 
-inline void IniConfig::load_setpath(const std::string& pathname, const StrViewA &path) {
+inline void IniConfig::load_setpath(const std::string& pathname, const std::string_view &path) {
      if (!load_setpath(pathname, path, [](const IniItem &itm){
           std::string msg;
           msg.append("[")
-                    .append(itm.section.data, itm.section.length)
+                    .append(itm.section.data(), itm.section.length())
                     .append("] @")
-                    .append(itm.key.data, itm.key.length)
+                    .append(itm.key.data(), itm.key.length())
                     .append(" ")
-                    .append(itm.value.data, itm.value.length);
+                    .append(itm.value.data(), itm.value.length());
           throw ConfigLoadError(msg);
      } )) {
           throw ConfigLoadError(pathname);
@@ -358,9 +360,9 @@ inline std::size_t IniConfig::Value::getUInt() const {
 
 inline bool IniConfig::Value::getBool() const {
 
-     constexpr auto cmpstr = [](StrViewA a, StrViewA b) {
-          if (a.length == b.length) {
-               for (std::size_t i = 0; i < a.length; i++)
+     constexpr auto cmpstr = [](std::string_view a, std::string_view b) {
+          if (a.length() == b.length()) {
+               for (std::size_t i = 0; i < a.length(); i++)
                     if (toupper(a[i]) != toupper(b[i])) return false;
                return true;
           } else {
@@ -368,7 +370,7 @@ inline bool IniConfig::Value::getBool() const {
           }
      };
 
-     constexpr StrViewA yes_forms[] = {"true","1","yes","y","on"};
+     constexpr std::string_view yes_forms[] = {"true","1","yes","y","on"};
      auto sv = getString();
      for (auto && x: yes_forms) {
           if (cmpstr(sv,x)) return true;
@@ -395,7 +397,7 @@ inline IniConfig::Value IniConfig::createValue(const String &value) {
      return vv;
 }
 
-inline IniConfig::KeyValueMap &IniConfig::loadSection(StrViewA section) {
+inline IniConfig::KeyValueMap &IniConfig::loadSection(std::string_view section) {
      auto s = smap.find(section);
      KeyValueMap *kv;
      if (s == smap.end()) {
@@ -422,7 +424,7 @@ inline std::string IniConfig::Value::getPath(std::string&& default_path) const {
      else return std::move(default_path);
 }
 
-inline StrViewA IniConfig::Value::getCurPath(StrViewA default_path) const {
+inline std::string_view IniConfig::Value::getCurPath(std::string_view default_path) const {
      if (defined()) return getCurPath();
      else return default_path;
 }
@@ -443,7 +445,7 @@ inline bool IniConfig::Value::getBool(bool default_value) const {
      else return default_value;
 }
 
-inline StrViewA IniConfig::Value::getString(const StrViewA& default_value) const {
+inline std::string_view IniConfig::Value::getString(const std::string_view& default_value) const {
      if (defined()) return getString();
      else return default_value;
 }

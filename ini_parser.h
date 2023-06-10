@@ -1,7 +1,10 @@
 #ifndef _ONDRA_SHARED_INI_PARSER_23123148209810_
 #define _ONDRA_SHARED_INI_PARSER_23123148209810_
 
-#include "stringview.h"
+#include <cctype>
+#include <string_view>
+#include <vector>
+
 
 namespace ondra_shared {
 
@@ -15,13 +18,13 @@ struct IniItem {
      };
 
      Type type;
-     StrViewA section;
-     StrViewA key;
-     StrViewA value;
+     std::string_view section;
+     std::string_view key;
+     std::string_view value;
 
-     IniItem(Type t, const StrViewA &a):type(t),value(a) {}
-     IniItem(Type t, const StrViewA &a, const StrViewA &b):type(t),key(a),value(b) {}
-     IniItem(Type t, const StrViewA &a, const StrViewA &b, const StrViewA &c):type(t),section(a),key(b),value(c) {}
+     IniItem(Type t, const std::string_view &a):type(t),value(a) {}
+     IniItem(Type t, const std::string_view &a, const std::string_view &b):type(t),key(a),value(b) {}
+     IniItem(Type t, const std::string_view &a, const std::string_view &b, const std::string_view &c):type(t),section(a),key(b),value(c) {}
 
 
 };
@@ -110,7 +113,8 @@ public:
           ,valueSize(0)
           ,escapeChar('\\')
           ,fn(std::forward<Output>(out))
-          ,curState(beginLine) {}
+          ,curState(beginLine)
+          ,afterEscapeState(beginLine){}
 
 
      void operator()(int c) {
@@ -149,7 +153,7 @@ protected:
 
 
      void readBeginLine(int c) {
-          if (isspace(c)) return;
+          if (std::isspace(c)) return;
 
 
 
@@ -173,7 +177,7 @@ protected:
      void readComment(int c) {
           if (isnl(c)) {
                curState = beginLine;
-               fn(IniItem(IniItem::comment, StrViewA(buffer.data()+sectionSize, buffer.size()-sectionSize)));
+               fn(IniItem(IniItem::comment, std::string_view(buffer.data()+sectionSize, buffer.size()-sectionSize)));
           } else {
                buffer.push_back((char)c);
           }
@@ -207,23 +211,34 @@ protected:
      void readValue(int c) {
           readValueGen(c, value, IniItem::data);
      }
+
+     static std::string_view trim(std::string_view what) {
+         while (!what.empty() && std::isspace(what.front())) {
+             what = what.substr(1);
+         }
+         while (!what.empty() && std::isspace(what.back())) {
+             what = what.substr(0, what.length()-1);
+         }
+         return what;
+     }
+
      void readValueGen(int c, State escState, IniItem::Type dataType) {
           if (isnl(c)) {
                buffer.push_back(0);
                valueSize = buffer.size() - (keySize+sectionSize);
-               StrViewA sectionName(buffer.data(), sectionSize-1);
-               StrViewA keyName(buffer.data()+sectionSize, keySize-1);
-               StrViewA valueName(buffer.data()+sectionSize+keySize, valueSize-1);
-               sectionName=sectionName.trim(isspace);
-               keyName=keyName.trim(isspace);
-               valueName=valueName.trim(isspace);
-               buffer[sectionName.data+sectionName.length - buffer.data()] = 0;
-               buffer[keyName.data+keyName.length - buffer.data()] = 0;
-               buffer[valueName.data+valueName.length - buffer.data()] = 0;
+               std::string_view sectionName(buffer.data(), sectionSize-1);
+               std::string_view keyName(buffer.data()+sectionSize, keySize-1);
+               std::string_view valueName(buffer.data()+sectionSize+keySize, valueSize-1);
+               sectionName=trim(sectionName);
+               keyName=trim(keyName);
+               valueName=trim(valueName);
+               buffer[sectionName.data()+sectionName.length() - buffer.data()] = 0;
+               buffer[keyName.data()+keyName.length() - buffer.data()] = 0;
+               buffer[valueName.data()+valueName.length() - buffer.data()] = 0;
                bool processed = false;
                if (dataType == IniItem::directive) {
                     if (keyName == "\\") {
-                         if (valueName.length == 1) {
+                         if (valueName.length() == 1) {
                               escapeChar = valueName[0];
                               processed = true;
                          }
